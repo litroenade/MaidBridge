@@ -1,0 +1,32 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.github.litroenade.maidbridge.mixin",
+  "plugin": "com.github.litroenade.maidbridge.mixin.MaidBridgeMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "AIChatScreenMixin",
+    "ClearMaidAIDataPacketMixin",
+    "HistoryAIChatScreenMixin",
+    "HistoryChatWidgetMixin",
+    "HistorySummaryManagerMixin",
+    "LLMCallbackMixin",
+    "LLMOpenAIClientMixin",
+    "MaidAIChatDataMixin",
+    "MaidAIChatManagerGuardMixin",
+    "MaidAIChatManagerMixin",
+    "OpenAIConfigPacketMixin",
+    "OpenMaidAIChatPacketMixin",
+    "SaveLLMSitePacketMixin",
+    "SaveMaidAIDataPackageMixin",
+    "SaveTTSSitePacketMixin",
+    "SendUserChatPackageMixin",
+    "PressAIChatKeyEventMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}

@@ -1,0 +1,261 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '2.0.141'
+}
+
+version = mod_version
+group = mod_group_id
+
+def touhouLittleMaidDir = file('../TouhouLittleMaid')
+def touhouLittleMaidProperties = new Properties()
+file("${touhouLittleMaidDir}/gradle.properties").withInputStream {
+    touhouLittleMaidProperties.load(it)
+}
+def touhouLittleMaidVersion = touhouLittleMaidProperties.getProperty('mod_version')
+def touhouLittleMaidJar = file("${touhouLittleMaidDir}/build/libs/touhoulittlemaid-${touhouLittleMaidVersion}-all.jar")
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+    maven {
+        url = "https://api.modrinth.com/maven"
+        content {
+            includeGroup "maven.modrinth"
+        }
+    }
+}
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+var buildTouhouLittleMaidJar = tasks.register("buildTouhouLittleMaidJar", Exec) {
+    workingDir touhouLittleMaidDir
+    def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+    commandLine isWindows ? ['cmd', '/c', 'gradlew.bat', 'shadowJar'] : ['./gradlew', 'shadowJar']
+    inputs.files(
+            fileTree("${touhouLittleMaidDir}/src"),
+            file("${touhouLittleMaidDir}/build.gradle"),
+            file("${touhouLittleMaidDir}/gradle.properties"),
+            file("${touhouLittleMaidDir}/settings.gradle")
+    )
+    outputs.file(touhouLittleMaidJar)
+}
+
+var syncTouhouLittleMaidRuntimeMod = tasks.register("syncTouhouLittleMaidRuntimeMod", Copy) {
+    dependsOn buildTouhouLittleMaidJar
+    from(touhouLittleMaidJar) {
+        rename { "touhoulittlemaid-runtime.jar" }
+    }
+    into layout.projectDirectory.dir("run/mods")
+}
+
+neoForge {
+    // Specify the version of NeoForge to use.
+    version = project.neo_version
+
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
+    }
+
+    // This line is optional. Access Transformers are automatically detected
+    // accessTransformers.add('src/main/resources/META-INF/accesstransformer.cfg')
+
+    // Default run configurations.
+    // These can be tweaked, removed, or duplicated as needed.
+    runs {
+        client {
+            client()
+            taskBefore syncTouhouLittleMaidRuntimeMod
+        }
+
+        server {
+            server()
+            taskBefore syncTouhouLittleMaidRuntimeMod
+            programArgument '--nogui'
+        }
+
+        data {
+            data()
+            taskBefore syncTouhouLittleMaidRuntimeMod
+
+            // example of overriding the workingDirectory set in configureEach above, uncomment if you want to use it
+            // gameDirectory = project.file('run-data')
+
+            // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
+            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+        }
+
+        // applies to all the run configs above
+        configureEach {
+            // Recommended logging data for a userdev environment
+            // The markers can be added/remove as needed separated by commas.
+            // "SCAN": For mods scan.
+            // "REGISTRIES": For firing of registry events.
+            // "REGISTRYDUMP": For getting the contents of all registries.
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+
+            // Recommended logging level for the console
+            // You can set various levels here.
+            // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        // define mod <-> source bindings
+        // these are used to tell the game which sources are for which mod
+        // mostly optional in a single mod project
+        // but multi mod projects should define one per mod
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
+    additionalRuntimeClasspath.extendsFrom localRuntime
+}
+
+dependencies {
+    // Example mod dependency with JEI
+    // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
+    // compileOnly "mezz.jei:jei-${mc_version}-common-api:${jei_version}"
+    // compileOnly "mezz.jei:jei-${mc_version}-forge-api:${jei_version}"
+    // runtimeOnly "mezz.jei:jei-${mc_version}-forge:${jei_version}"
+
+    // Example mod dependency using a mod jar from ./libs with a flat dir repository
+    // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
+    // The group id is ignored when searching -- in this case, it is "blank"
+    // implementation "blank:coolmod-${mc_version}:${coolmod_version}"
+
+    // Example mod dependency using a file as dependency
+    // implementation files("libs/coolmod-${mc_version}-${coolmod_version}.jar")
+
+    // Example project dependency using a sister or child project:
+    // implementation project(":myproject")
+
+    implementation "maven.modrinth:cloth-config:${cloth_config_version}"
+    jarJar(implementation("org.java-websocket:Java-WebSocket:[${java_websocket_version},2.0.0)") {
+        exclude group: "org.slf4j", module: "slf4j-api"
+    })
+    localRuntime("org.java-websocket:Java-WebSocket:${java_websocket_version}") {
+        exclude group: "org.slf4j", module: "slf4j-api"
+    }
+    compileOnly files(touhouLittleMaidJar)
+
+    // For more info:
+    // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
+    // http://www.gradle.org/docs/current/userguide/dependency_management.html
+}
+
+tasks.register("verifyJarJarMetadata") {
+    group = "verification"
+    description = "Verifies the release jar embeds Java-WebSocket through NeoForge Jar-in-Jar metadata."
+
+    def jarTask = tasks.named("jar", Jar)
+    def jarArchiveFile = jarTask.flatMap { it.archiveFile }
+    def metadataPath = "META-INF/jarjar/metadata.json"
+    def expectedGroup = "org.java-websocket"
+    def expectedArtifact = "Java-WebSocket"
+    def expectedVersion = java_websocket_version
+    def expectedRange = "[${java_websocket_version},2.0.0)"
+    def expectedPath = "META-INF/jarjar/Java-WebSocket-${java_websocket_version}.jar"
+
+    dependsOn jarTask
+    inputs.file(jarArchiveFile)
+    inputs.property("javaWebSocketVersion", expectedVersion)
+    inputs.property("javaWebSocketRange", expectedRange)
+
+    doLast {
+        def archiveFile = jarArchiveFile.get().asFile
+        if (!archiveFile.isFile()) {
+            throw new GradleException("Built jar not found: ${archiveFile}")
+        }
+
+        new java.util.zip.ZipFile(archiveFile).withCloseable { zip ->
+            if (zip.getEntry(expectedPath) == null) {
+                throw new GradleException("Missing embedded Java-WebSocket jar: ${expectedPath}")
+            }
+
+            def metadataEntry = zip.getEntry(metadataPath)
+            if (metadataEntry == null) {
+                throw new GradleException("Missing Jar-in-Jar metadata: ${metadataPath}")
+            }
+
+            def metadata
+            zip.getInputStream(metadataEntry).withCloseable { input ->
+                metadata = input.getText("UTF-8")
+            }
+
+            if (!metadata.contains('"jars"')) {
+                throw new GradleException("Jar-in-Jar metadata has no jars array")
+            }
+            if (!metadata.contains("\"group\": \"${expectedGroup}\"") || !metadata.contains("\"artifact\": \"${expectedArtifact}\"")) {
+                throw new GradleException("Jar-in-Jar metadata has no ${expectedGroup}:${expectedArtifact} entry")
+            }
+            if (!metadata.contains("\"artifactVersion\": \"${expectedVersion}\"")) {
+                throw new GradleException("Java-WebSocket artifactVersion must be ${expectedVersion}")
+            }
+            if (!metadata.contains("\"range\": \"${expectedRange}\"")) {
+                throw new GradleException("Java-WebSocket range must be ${expectedRange}")
+            }
+            if (!metadata.contains("\"path\": \"${expectedPath}\"")) {
+                throw new GradleException("Java-WebSocket path must be ${expectedPath}")
+            }
+        }
+    }
+}
+
+tasks.named("check").configure {
+    dependsOn tasks.named("verifyJarJarMetadata")
+}
+
+tasks.named("compileJava").configure {
+    dependsOn buildTouhouLittleMaidJar
+}
+
+tasks.matching {
+    it.name in [
+            "prepareClientRun",
+            "prepareServerRun",
+            "prepareDataRun",
+            "runClient",
+            "runServer",
+            "runData"
+    ]
+}.configureEach {
+    dependsOn syncTouhouLittleMaidRuntimeMod
+}
+
+// This block of code expands all declared replace properties in the specified resource targets.
+// A missing property will result in an error. Properties are expanded using ${} Groovy notation.
+var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
+    var replaceProperties = [minecraft_version      : minecraft_version,
+                             minecraft_version_range: minecraft_version_range,
+                             neo_version            : neo_version,
+                             neo_version_range      : neo_version_range,
+                             cloth_config_version   : cloth_config_version,
+                             cloth_config_version_range: cloth_config_version_range,
+                             loader_version_range   : loader_version_range,
+                             mod_id                 : mod_id,
+                             mod_name               : mod_name,
+                             mod_license            : mod_license,
+                             mod_version            : mod_version,
+                             mod_authors            : mod_authors,
+                             mod_description        : mod_description]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from "src/main/templates"
+    into "build/generated/sources/modMetadata"
+}
+
+// Include the output of "generateModMetadata" as an input directory for the build
+// this works with both building through Gradle and the IDE.
+sourceSets.main.resources.srcDir generateModMetadata
+// To avoid having to run "generateModMetadata" manually, make it run on every project reload
+neoForge.ideSyncTask generateModMetadata

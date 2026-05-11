@@ -1,0 +1,75 @@
+# Gradle
+/.gradle/
+/.gradle-home/
+/build/
+**/build/
+gradle-app.setting
+.gradletasknamecache
+
+# Keep the Gradle wrapper checked in.
+!gradle/wrapper/gradle-wrapper.jar
+
+# NeoForge / Minecraft run outputs
+/run/
+/runs/
+/run-*/
+/logs/
+/crash-reports/
+/debug/
+/config/
+/saves/
+/server.properties
+/eula.txt
+/banned-ips.json
+/banned-players.json
+/ops.json
+/usercache.json
+/whitelist.json
+
+# Java / IDE build outputs
+/bin/
+/out/
+/target/
+*.class
+
+# IDE local state
+/.idea/
+/.vscode/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+.factorypath
+
+# Generated archives and packaged artifacts
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar
+*.tar.gz
+*.rar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Logs, dumps, and crash artifacts
+*.log
+*.hprof
+hs_err_pid*
+replay_pid*
+*.stackdump
+
+# OS / filesystem noise
+.DS_Store
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.lnk
+*~
+.fuse_hidden*
+.nfs*
