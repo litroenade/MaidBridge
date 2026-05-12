@@ -13,6 +13,7 @@ import com.github.litroenade.maidbridge.trace.ReflectiveAccess;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +58,7 @@ public final class MaidAgentTurnRequest {
                 safeString(message),
                 mapPayload(payload.get("speaker"))
         )) {
-            writeUserHistory(chatManager, message, sender);
+            writeUserHistory(chatManager, message, sender, mapPayload(payload.get("speaker")));
             AiChainEventSink.emit(EVENT_TYPE, payload);
             return new EmitResult(EmitStatus.EMITTED, turnIdentity.maidUuid(), turnIdentity.turnId(), "");
         }
@@ -79,7 +80,7 @@ public final class MaidAgentTurnRequest {
                 safeString(message),
                 mapPayload(payload.get("speaker"))
         )) {
-            writeUserHistory(MaidApiReflection.invoke(maid, "getAiChatManager"), message, null);
+            writeUserHistory(MaidApiReflection.invoke(maid, "getAiChatManager"), message, null, mapPayload(payload.get("speaker")));
             AiChainEventSink.emit(EVENT_TYPE, payload);
             return;
         }
@@ -208,7 +209,13 @@ public final class MaidAgentTurnRequest {
     }
 
     private static Map<String, Object> clientPayload(MaidClientInfo clientInfo) {
-        return clientInfo.toBridgePayload("en_us", "MaidBridge");
+        var payload = clientInfo.toBridgePayload("en_us", "MaidBridge");
+        putIfPresent(payload, "name", firstNonBlank(
+                safeString(clientInfo.metadata().get("source_member_name")),
+                safeString(clientInfo.metadata().get("nickname")),
+                clientInfo.name()
+        ));
+        return payload;
     }
 
     private static Map<String, Object> speakerPayload(Object clientInfo, Object sender) {
@@ -252,7 +259,7 @@ public final class MaidAgentTurnRequest {
         );
     }
 
-    private static void writeUserHistory(Object chatManager, String message, Object sender) {
+    private static void writeUserHistory(Object chatManager, String message, Object sender, Map<String, Object> speaker) {
         try {
             if (sender instanceof ServerPlayer player) {
                 Object maid = ReflectiveAccess.invoke(chatManager, "getMaid");
@@ -266,10 +273,46 @@ public final class MaidAgentTurnRequest {
                     return;
                 }
             }
+            UUID speakerUuid = speakerUuidFromPayload(speaker);
+            String speakerName = speakerNameFromPayload(speaker);
+            if (speakerUuid != null && !speakerName.isBlank()) {
+                Object maid = ReflectiveAccess.invoke(chatManager, "getMaid");
+                if (maid instanceof EntityMaid entityMaid) {
+                    MaidAIChatAttributionContext.runWith(
+                            entityMaid,
+                            speakerUuid,
+                            speakerName,
+                            message,
+                            () -> MaidApiReflection.invoke(chatManager, "addUserHistory", message)
+                    );
+                    return;
+                }
+            }
             MaidApiReflection.invoke(chatManager, "addUserHistory", message);
         } catch (RuntimeException exception) {
             MaidBridge.LOGGER.warn("外部接管写入 user history 失败 message={}", message, exception);
         }
+    }
+
+    private static UUID speakerUuidFromPayload(Map<String, Object> speaker) {
+        String value = firstNonBlank(safeString(speaker.get("uuid")), safeString(speaker.get("source_member_id")));
+        if (value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException ignored) {
+            return UUID.nameUUIDFromBytes(("maidbridge:speaker:" + value).getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    private static String speakerNameFromPayload(Map<String, Object> speaker) {
+        return firstNonBlank(
+                safeString(speaker.get("name")),
+                safeString(speaker.get("nickname")),
+                safeString(speaker.get("source_member_name")),
+                "MaidBridge"
+        );
     }
 
     private static String clean(Object value) {

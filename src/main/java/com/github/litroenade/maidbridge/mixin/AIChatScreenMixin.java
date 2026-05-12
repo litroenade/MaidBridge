@@ -1,12 +1,10 @@
 package com.github.litroenade.maidbridge.mixin;
 
-import com.github.litroenade.maidbridge.Config;
 import com.github.litroenade.maidbridge.maid.ai.chat.client.MaidAIChatClientAccessState;
 import com.github.tartaricacid.touhoulittlemaid.client.gui.widget.button.FlatColorButton;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
@@ -24,8 +22,6 @@ public abstract class AIChatScreenMixin extends Screen {
     @Shadow
     @Final
     private EntityMaid maid;
-    @Shadow
-    private EditBox input;
     @Shadow
     private FlatColorButton configButton;
     @Shadow
@@ -79,7 +75,7 @@ public abstract class AIChatScreenMixin extends Screen {
 
     @Unique
     private boolean maidbridge$shouldLockControls() {
-        return Config.isExternalMaidAgentMode() || maidbridge$isChatOnly(this.maid) || maidbridge$isNonOwner(this.maid);
+        return maidbridge$isChatOnly(this.maid) || maidbridge$isNonOwner(this.maid);
     }
 
     @Unique

@@ -15,10 +15,17 @@ public final class MaidAIChatAttributionContext {
     public static void runWith(EntityMaid maid, ServerPlayer speaker, String message, Runnable action) {
         Objects.requireNonNull(maid, "maid");
         Objects.requireNonNull(speaker, "speaker");
+        runWith(maid, speaker.getUUID(), speaker.getGameProfile().getName(), message, action);
+    }
+
+    public static void runWith(EntityMaid maid, UUID speakerUuid, String speakerName, String message, Runnable action) {
+        Objects.requireNonNull(maid, "maid");
+        Objects.requireNonNull(speakerUuid, "speakerUuid");
+        Objects.requireNonNull(speakerName, "speakerName");
         Objects.requireNonNull(message, "message");
         Objects.requireNonNull(action, "action");
         var previous = CURRENT.get();
-        CURRENT.set(new PendingAttribution(maid.getUUID(), speaker, message));
+        CURRENT.set(new PendingAttribution(maid.getUUID(), speakerUuid, speakerName, message));
         try {
             action.run();
         } finally {
@@ -38,18 +45,20 @@ public final class MaidAIChatAttributionContext {
             return;
         }
         pending.committed = true;
-        MaidAIChatAttributionStore.record(maid, pending.speaker, message);
+        MaidAIChatAttributionStore.record(maid, pending.speakerUuid, pending.speakerName, message);
     }
 
     private static final class PendingAttribution {
         private final UUID maidUuid;
-        private final ServerPlayer speaker;
+        private final UUID speakerUuid;
+        private final String speakerName;
         private final String message;
         private boolean committed;
 
-        private PendingAttribution(UUID maidUuid, ServerPlayer speaker, String message) {
+        private PendingAttribution(UUID maidUuid, UUID speakerUuid, String speakerName, String message) {
             this.maidUuid = maidUuid;
-            this.speaker = speaker;
+            this.speakerUuid = speakerUuid;
+            this.speakerName = speakerName;
             this.message = message;
         }
 

@@ -1,6 +1,5 @@
 package com.github.litroenade.maidbridge.mixin;
 
-import com.github.litroenade.maidbridge.Config;
 import com.github.litroenade.maidbridge.maid.ai.chat.MaidAIChatAccess;
 import com.github.litroenade.maidbridge.maid.ai.chat.MaidAIChatServerAccessState;
 import com.github.litroenade.maidbridge.network.MaidBridgeNetwork;
@@ -34,12 +33,6 @@ public abstract class OpenMaidAIChatPacketMixin {
             return;
         }
         if (!MaidAIChatAccess.canOpenChat(maid, player)) {
-            return;
-        }
-        if (Config.isExternalMaidAgentMode()) {
-            MaidAIChatServerAccessState.setChatOnly(player, maid.getUUID());
-            MaidBridgeNetwork.sendToClientPlayer(OpenReadonlyMaidAIChatPacket.from(maid, player), player);
-            ci.cancel();
             return;
         }
         if (MaidAIChatAccess.canEditSettings(maid, player)) {

@@ -24,7 +24,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
-import java.util.UUID;
 
 @Mixin(targets = "com.github.tartaricacid.touhoulittlemaid.client.gui.entity.maid.ai.HistoryAIChatScreen", remap = false)
 public abstract class HistoryAIChatScreenMixin extends Screen {
@@ -64,8 +63,10 @@ public abstract class HistoryAIChatScreenMixin extends Screen {
             return;
         }
         String displayText = this.maidbridge$getDisplayMessage(message).getString();
-        String speakerName = maidbridge$resolveSpeaker(this.maid.getUUID(), displayText, message.gameTime());
-        MaidAIChatHistoryWidgetSpeakerNames.bind(widget, speakerName);
+        var speaker = MaidAIChatAttributionClientCache.resolveSpeaker(this.maid.getUUID(), displayText, message.gameTime());
+        if (speaker != null) {
+            MaidAIChatHistoryWidgetSpeakerNames.bind(widget, speaker.speakerUuid(), speaker.speakerName());
+        }
     }
 
     @Invoker("getClearButtonY")
@@ -90,9 +91,4 @@ public abstract class HistoryAIChatScreenMixin extends Screen {
         return MaidAIChatClientAccessState.isChatOnly(maid);
     }
 
-    @Unique
-    private static String maidbridge$resolveSpeaker(UUID maidUuid, String displayText, long gameTime) {
-        var entry = MaidAIChatAttributionClientCache.resolveSpeaker(maidUuid, displayText, gameTime);
-        return entry == null ? null : entry.speakerName();
-    }
 }

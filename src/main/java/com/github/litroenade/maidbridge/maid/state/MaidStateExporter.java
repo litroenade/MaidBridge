@@ -31,7 +31,17 @@ public final class MaidStateExporter {
     public static Map<String, Object> compactIdentity(Object maid) {
         var identity = new LinkedHashMap<String, Object>();
         identity.put("uuid", clean(ReflectiveAccess.invoke(maid, "getUUID")));
-        putIfPresent(identity, "name", ReflectiveAccess.componentText(ReflectiveAccess.invoke(maid, "getName")));
+        String displayName = ReflectiveAccess.componentText(ReflectiveAccess.invoke(maid, "getName"));
+        putIfPresent(identity, "name", displayName);
+        putIfPresent(identity, "display_name", displayName);
+        if (maid instanceof EntityMaid entityMaid) {
+            var customName = entityMaid.getCustomName();
+            if (customName != null) {
+                putIfPresent(identity, "custom_name", customName.getString());
+            }
+        }
+        putIfPresent(identity, "model_id", clean(ReflectiveAccess.invoke(maid, "getModelId")));
+        putIfPresent(identity, "model_name", ReflectiveAccess.componentText(ReflectiveAccess.invoke(maid, "getTypeName")));
         return identity;
     }
 

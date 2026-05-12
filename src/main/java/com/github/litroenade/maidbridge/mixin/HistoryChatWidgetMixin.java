@@ -7,12 +7,14 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import org.apache.commons.lang3.StringUtils;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(targets = "com.github.tartaricacid.touhoulittlemaid.client.gui.widget.button.HistoryChatWidget", remap = false)
@@ -28,13 +30,26 @@ public abstract class HistoryChatWidgetMixin extends AbstractWidget {
         super(0, 0, 0, 0, Component.empty());
     }
 
+    @ModifyArg(
+            method = "drawAvatar",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/gui/components/PlayerFaceRenderer;draw(Lnet/minecraft/client/gui/GuiGraphics;Lnet/minecraft/resources/ResourceLocation;III)V"
+            ),
+            index = 1
+    )
+    private ResourceLocation maidbridge$replaceSpeakerSkin(ResourceLocation originalSkin) {
+        ResourceLocation speakerSkin = MaidAIChatHistoryWidgetSpeakerNames.getPlayerSkin((HistoryChatWidget) (Object) this);
+        return speakerSkin == null ? originalSkin : speakerSkin;
+    }
+
     @Inject(method = "renderWidget", at = @At("TAIL"))
     private void maidbridge$renderSpeakerName(GuiGraphics graphics, int mouseX, int mouseY, float partialTick,
                                               CallbackInfo ci) {
         if (this.isLeft || this.isTool) {
             return;
         }
-        String speakerName = MaidAIChatHistoryWidgetSpeakerNames.get((HistoryChatWidget) (Object) this);
+        String speakerName = MaidAIChatHistoryWidgetSpeakerNames.getName((HistoryChatWidget) (Object) this);
         if (StringUtils.isBlank(speakerName)) {
             return;
         }
