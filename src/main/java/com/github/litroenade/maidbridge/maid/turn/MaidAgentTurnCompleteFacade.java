@@ -7,6 +7,8 @@ import com.github.litroenade.maidbridge.maid.api.MaidEntityLookup;
 import com.github.litroenade.maidbridge.protocol.BridgeProtocol;
 import com.github.litroenade.maidbridge.protocol.frame.MaidAgentTurnComplete;
 import com.github.tartaricacid.touhoulittlemaid.config.subconfig.AIConfig;
+import com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.ChatBubbleManager;
+import com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.implement.TextChatBubbleData;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
@@ -61,7 +63,8 @@ public final class MaidAgentTurnCompleteFacade {
 
             var ttsDispatch = dispatchTtsIfRequested(maid, result.chatText(), result.ttsText());
             var actionResults = MaidActionExecutor.applyAll(maid, result.actions());
-            var ownerDelivered = ttsDispatch.dispatched() ? ownerOnline(maid) : deliverChatText(maid, result.chatText());
+            var displayName = externalAgentDisplayName(maid, pendingTurn);
+            var ownerDelivered = ttsDispatch.dispatched() ? ownerOnline(maid) : deliverChatText(maid, result.chatText(), displayName);
             var historyAppended = appendHistoryIfRequested(maid, result.chatText(), historyPolicy);
 
             emitMaidMessageOut(result, pendingTurn, maid, actionResults, ttsDispatch);
@@ -109,6 +112,7 @@ public final class MaidAgentTurnCompleteFacade {
         var payload = new LinkedHashMap<String, Object>();
         payload.put("routed", BridgeProtocol.TYPE_MAID_AGENT_TURN_COMPLETE);
         putMaidTurnIdentity(payload, result, maid);
+        putAgentIdentity(payload, pendingTurn);
         payload.put("request_id", pendingTurn.requestId());
         payload.put("accepted_at_ms", clock.getAsLong());
         payload.put("chat_text_delivered", true);
@@ -124,6 +128,7 @@ public final class MaidAgentTurnCompleteFacade {
     private static void emitMaidMessageOut(MaidAgentTurnComplete result, MaidExternalTurnGuard.ActiveTurn completedTurn, Entity maid, List<Map<String, Object>> actionResults, TtsDispatch ttsDispatch) {
         var payload = new LinkedHashMap<String, Object>();
         putMaidTurnIdentity(payload, result, maid);
+        putAgentIdentity(payload, completedTurn);
         payload.put("chat_text", result.chatText());
         payload.put("message_kind", "external_agent_final");
         payload.put("actions_applied", actionResults.size());
@@ -139,6 +144,16 @@ public final class MaidAgentTurnCompleteFacade {
         maidPayload.put("name", MaidEntityLookup.entityName(maid));
         payload.put("maid", maidPayload);
         payload.put("turn_id", result.turnId());
+    }
+
+    private static void putAgentIdentity(Map<String, Object> payload, MaidExternalTurnGuard.ActiveTurn pendingTurn) {
+        var agentName = firstNonBlank(pendingTurn.deliveredAgentName());
+        if (agentName.isBlank()) {
+            return;
+        }
+        var agentPayload = new LinkedHashMap<String, Object>();
+        agentPayload.put("name", agentName);
+        payload.put("agent", agentPayload);
     }
 
     private static void putClientMetadata(Map<String, Object> payload, Map<String, Object> clientMetadata) {
@@ -166,31 +181,28 @@ public final class MaidAgentTurnCompleteFacade {
         return MaidEntityLookup.findByUuid(server, UUID.fromString(maidUuid));
     }
 
-    private static boolean deliverChatText(Entity maid, String chatText) {
-        if (tryAddLlmChatText(maid, chatText)) {
-            return ownerOnline(maid);
-        }
+    private static boolean deliverChatText(Entity maid, String chatText, String displayName) {
+        var bubbleDelivered = tryAddExternalAgentChatBubble(maid, chatText);
         var owner = invoke(maid, "getOwner");
         if (owner instanceof ServerPlayer player) {
-            Component name = maid.getName();
+            Component name = Component.literal(firstNonBlank(displayName, MaidEntityLookup.entityName(maid)));
             player.sendSystemMessage(Component.literal("<").append(name).append(">").append(CommonComponents.SPACE).append(chatText)
                     .withStyle(ChatFormatting.GRAY));
             return true;
         }
+        if (bubbleDelivered) {
+            return false;
+        }
         throw new IllegalArgumentException("投递女仆轮次结果 chat_text 失败");
     }
 
-    private static boolean tryAddLlmChatText(Entity maid, String chatText) {
-        try {
-            var bubbleManager = invoke(maid, "getChatBubbleManager");
-            Method method = bubbleManager.getClass().getMethod("addLLMChatText", String.class, long.class);
-            method.invoke(bubbleManager, chatText, -1L);
-            return true;
-        } catch (IllegalAccessException | NoSuchMethodException exception) {
+    private static boolean tryAddExternalAgentChatBubble(Entity maid, String chatText) {
+        var bubbleManager = invoke(maid, "getChatBubbleManager");
+        if (!(bubbleManager instanceof ChatBubbleManager manager)) {
             return false;
-        } catch (InvocationTargetException exception) {
-            throw rethrowInvocation("ChatBubbleManager.addLLMChatText", exception);
         }
+        manager.addChatBubble(TextChatBubbleData.type2(Component.literal(chatText)));
+        return true;
     }
 
     private static TtsDispatch dispatchTtsIfRequested(Entity maid, String chatText, String ttsText) {
@@ -269,6 +281,10 @@ public final class MaidAgentTurnCompleteFacade {
 
     private static boolean ownerOnline(Entity maid) {
         return invoke(maid, "getOwner") instanceof ServerPlayer;
+    }
+
+    private static String externalAgentDisplayName(Entity maid, MaidExternalTurnGuard.ActiveTurn pendingTurn) {
+        return firstNonBlank(pendingTurn.deliveredAgentName(), MaidEntityLookup.entityName(maid));
     }
 
     private static Object invoke(Object target, String methodName) {

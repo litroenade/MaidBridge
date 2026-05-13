@@ -544,7 +544,11 @@ public final class BridgeTransport {
         if (!BridgeProtocol.TYPE_MAID_AGENT_TURN_REQUEST.equals(frame.type())) {
             return;
         }
-        MaidExternalTurnGuard.markDelivered(new MaidTurnIdentity(frame.maidUuid(), frame.turnId(), frame.requestId()), session.id());
+        MaidExternalTurnGuard.markDelivered(
+                new MaidTurnIdentity(frame.maidUuid(), frame.turnId(), frame.requestId()),
+                session.id(),
+                agentDisplayName(session)
+        );
     }
 
     private void recordOutboundSendFailure(

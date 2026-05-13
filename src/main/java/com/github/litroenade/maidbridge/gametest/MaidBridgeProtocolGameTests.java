@@ -32,11 +32,11 @@ public final class MaidBridgeProtocolGameTests {
         var requestId = "not-started-request-" + UUID.randomUUID();
         var otherRequestId = "not-started-other-request-" + UUID.randomUUID();
         var transport = new BridgeTransport();
-        if (!MaidExternalTurnGuard.beginExternalTurn(maidUuid, turnId, requestId, "hello", Map.of())) {
+        if (!MaidExternalTurnGuard.tryBeginExternalTurn(maidUuid, turnId, requestId, "hello", Map.of()).accepted()) {
             helper.fail("预置外部轮次应当被接受");
             return;
         }
-        if (!MaidExternalTurnGuard.beginExternalTurn(otherMaidUuid, turnId, otherRequestId, "keep me", Map.of())) {
+        if (!MaidExternalTurnGuard.tryBeginExternalTurn(otherMaidUuid, turnId, otherRequestId, "keep me", Map.of()).accepted()) {
             helper.fail("预置另一只女仆的外部轮次应当被接受");
             return;
         }
@@ -68,11 +68,11 @@ public final class MaidBridgeProtocolGameTests {
         var requestId = "queued-drop-request-" + UUID.randomUUID();
         var otherRequestId = "queued-drop-other-request-" + UUID.randomUUID();
         var transport = new BridgeTransport();
-        if (!MaidExternalTurnGuard.beginExternalTurn(maidUuid, turnId, requestId, "first", Map.of())) {
+        if (!MaidExternalTurnGuard.tryBeginExternalTurn(maidUuid, turnId, requestId, "first", Map.of()).accepted()) {
             helper.fail("预置外部轮次应当被接受");
             return;
         }
-        if (!MaidExternalTurnGuard.beginExternalTurn(otherMaidUuid, turnId, otherRequestId, "second", Map.of())) {
+        if (!MaidExternalTurnGuard.tryBeginExternalTurn(otherMaidUuid, turnId, otherRequestId, "second", Map.of()).accepted()) {
             helper.fail("预置另一只女仆的外部轮次应当被接受");
             return;
         }

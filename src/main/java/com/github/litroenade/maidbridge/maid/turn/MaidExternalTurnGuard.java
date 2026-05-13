@@ -45,10 +45,12 @@ public final class MaidExternalTurnGuard {
             long startedAt,
             long deadlineAt,
             String deliveredSessionId,
+            String deliveredAgentName,
             long deliveredAt
     ) {
         public ActiveTurn {
             clientMetadata = immutableMetadata(clientMetadata);
+            deliveredAgentName = safeString(deliveredAgentName);
         }
     }
 
@@ -82,10 +84,6 @@ public final class MaidExternalTurnGuard {
         return EXTERNAL_INJECTION_GUARD.tryBegin(maidUuid, turnId, requestId, userMessage, clientMetadata);
     }
 
-    public static boolean beginExternalTurn(String maidUuid, String turnId, String requestId, String userMessage, Map<String, Object> clientMetadata) {
-        return tryBeginExternalTurn(maidUuid, turnId, requestId, userMessage, clientMetadata).accepted();
-    }
-
     public static ActiveTurn completeExternalTurn(String maidUuid, String turnId) {
         return EXTERNAL_INJECTION_GUARD.complete(maidUuid, turnId);
     }
@@ -99,7 +97,11 @@ public final class MaidExternalTurnGuard {
     }
 
     public static void markDelivered(MaidTurnIdentity identity, String sessionId) {
-        EXTERNAL_INJECTION_GUARD.markIdentityDelivered(identity, sessionId);
+        markDelivered(identity, sessionId, "");
+    }
+
+    public static void markDelivered(MaidTurnIdentity identity, String sessionId, String agentName) {
+        EXTERNAL_INJECTION_GUARD.markIdentityDelivered(identity, sessionId, agentName);
     }
 
     public static List<CompletedTurn> releaseDeliveredToSession(String sessionId, String outcome, String reason) {
@@ -134,6 +136,7 @@ public final class MaidExternalTurnGuard {
                 immutableMetadata(clientMetadata),
                 now,
                 now + Math.max(1L, ttlMs.getAsLong()),
+                "",
                 "",
                 0L
         ));
@@ -196,7 +199,7 @@ public final class MaidExternalTurnGuard {
         return activeTurn == null ? null : completed(activeTurn, outcome, reason);
     }
 
-    private synchronized void markIdentityDelivered(MaidTurnIdentity identity, String sessionId) {
+    private synchronized void markIdentityDelivered(MaidTurnIdentity identity, String sessionId, String agentName) {
         releaseExpired(clock.getAsLong());
         var storedTurn = findStored(identity);
         if (storedTurn == null) {
@@ -211,6 +214,7 @@ public final class MaidExternalTurnGuard {
                 storedTurn.startedAt(),
                 storedTurn.deadlineAt(),
                 safeString(sessionId),
+                safeString(agentName),
                 clock.getAsLong()
         ));
     }
@@ -312,6 +316,7 @@ public final class MaidExternalTurnGuard {
                 activeTurn.startedAt(),
                 activeTurn.deadlineAt(),
                 activeTurn.deliveredSessionId(),
+                activeTurn.deliveredAgentName(),
                 activeTurn.deliveredAt()
         );
     }
@@ -342,11 +347,13 @@ public final class MaidExternalTurnGuard {
             long startedAt,
             long deadlineAt,
             String deliveredSessionId,
+            String deliveredAgentName,
             long deliveredAt
     ) {
         private StoredTurn {
             clientMetadata = immutableMetadata(clientMetadata);
             deliveredSessionId = safeString(deliveredSessionId);
+            deliveredAgentName = safeString(deliveredAgentName);
         }
     }
 }

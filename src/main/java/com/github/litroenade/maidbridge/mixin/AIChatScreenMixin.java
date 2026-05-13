@@ -166,12 +166,8 @@ public abstract class AIChatScreenMixin extends Screen {
         maidbridge$moveButton(this.llmButton, -slot);
         maidbridge$moveButton(this.ttsButton, -slot);
         maidbridge$moveButton(this.langButton, -slot);
-        this.maidbridge$agentButton = this.addRenderableWidget(new FlatColorButton(x - slot, y, size, size, Component.literal("✦"), button -> {
-            maidbridge$togglePopup(maidbridge$POPUP_AGENT);
-        }).setTooltips("gui.maidbridge.chat.button.agent.tip"));
-        this.maidbridge$modeButton = this.addRenderableWidget(new FlatColorButton(x, y, size, size, Component.literal("⇄"), button -> {
-            maidbridge$togglePopup(maidbridge$POPUP_MODE);
-        }).setTooltips("gui.maidbridge.chat.button.mode.tip"));
+        this.maidbridge$agentButton = this.addRenderableWidget(new FlatColorButton(x - slot, y, size, size, Component.literal("✦"), button -> maidbridge$togglePopup(maidbridge$POPUP_AGENT)).setTooltips("gui.maidbridge.chat.button.agent.tip"));
+        this.maidbridge$modeButton = this.addRenderableWidget(new FlatColorButton(x, y, size, size, Component.literal("⇄"), button -> maidbridge$togglePopup(maidbridge$POPUP_MODE)).setTooltips("gui.maidbridge.chat.button.mode.tip"));
     }
 
     @Unique
