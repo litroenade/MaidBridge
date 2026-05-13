@@ -35,7 +35,8 @@ public final class BridgeFrameBuilder {
         payload.put("gateway_chat_capture", Config.enableGatewayChatCapture);
         payload.put("maid_message_bridge", Config.enableMaidMessageBridge);
         payload.put("maid_api_exposure", Config.enableMaidApiExposure);
-        payload.put("external_maid_agent_turns", Config.enableExternalMaidAgentTurns);
+        payload.put("external_maid_agent_turns", Config.isExternalMaidAgentMode());
+        payload.put("maid_agent_turn_mode", Config.maidAgentTurnMode);
         payload.put("external_agent_emoji", Config.enableExternalAgentEmoji);
         putServerStatus(payload);
 
@@ -67,8 +68,13 @@ public final class BridgeFrameBuilder {
         }
         var frame = baseFrame(event.type(), payload);
         var payloadRequestId = stringValue(payload.get("request_id"));
-        frame.put("request_id", firstNonBlank(payloadRequestId, stringValue(frame.get("request_id")), stringValue(frame.get("id"))));
-        frame.put("trace_id", firstNonBlank(stringValue(payload.get("trace_id")), stringValue(frame.get("trace_id"))));
+        if (!payloadRequestId.isBlank()) {
+            frame.put("request_id", payloadRequestId);
+        }
+        var payloadTraceId = stringValue(payload.get("trace_id"));
+        if (!payloadTraceId.isBlank()) {
+            frame.put("trace_id", payloadTraceId);
+        }
         return frame;
     }
 
@@ -103,9 +109,7 @@ public final class BridgeFrameBuilder {
         frame.put("protocol", BridgeProtocol.PROTOCOL);
         frame.put("type", type);
         frame.put("id", id);
-        frame.put("request_id", id);
         frame.put("trace_id", traceId);
-        frame.put("deadline_ms", Config.bridgeDeadlineMs);
         frame.put("direction", BridgeProtocol.DIRECTION_JAVA_TO_CLIENT);
         frame.put("source_endpoint", firstNonBlank(Config.sourceEndpoint, Config.DEFAULT_SOURCE_ENDPOINT));
         frame.put("target_endpoint", firstNonBlank(Config.targetEndpoint, Config.DEFAULT_TARGET_ENDPOINT));
@@ -137,7 +141,8 @@ public final class BridgeFrameBuilder {
                 "gateway_chat_capture", Config.enableGatewayChatCapture,
                 "maid_message_bridge", Config.enableMaidMessageBridge,
                 "maid_api_exposure", Config.enableMaidApiExposure,
-                "external_maid_agent_turns", Config.enableExternalMaidAgentTurns,
+                "external_maid_agent_turns", Config.isExternalMaidAgentMode(),
+                "maid_agent_turn_mode", Config.maidAgentTurnMode,
                 "external_agent_emoji", Config.enableExternalAgentEmoji
         ));
         payload.put("capabilities", BridgeProtocol.serverCapabilities(
@@ -147,8 +152,8 @@ public final class BridgeFrameBuilder {
                 Config.enableMaidMessageBridge,
                 Config.enableMaidApiExposure,
                 Config.enableMaidApiActions,
-                Config.enableExternalMaidAgentTurns,
-                Config.enableExternalMaidAgentTurns,
+                Config.isExternalMaidAgentMode(),
+                Config.isExternalMaidAgentMode(),
                 Config.bridgeServerEnabled
         ));
     }

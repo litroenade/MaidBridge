@@ -91,7 +91,7 @@ public final class AiChainEventSink {
             return !Config.enableMaidMessageBridge;
         }
         if (type.startsWith(BridgeProtocol.PREFIX_MAID_AGENT)) {
-            return !Config.enableExternalMaidAgentTurns;
+            return !Config.isExternalMaidAgentMode();
         }
         if (type.startsWith(BridgeProtocol.PREFIX_MAID_API_REGISTRY)) {
             return !Config.enableMaidApiExposure;

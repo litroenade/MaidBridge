@@ -18,6 +18,7 @@ public record BridgeTransportSnapshot(
     public record Client(
             String sessionId,
             String clientName,
+            String agentId,
             List<String> roles,
             List<String> subscriptions,
             boolean activeAgent,

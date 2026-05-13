@@ -31,7 +31,6 @@
   "config.maidbridge.log_captured_events": "记录捕获事件日志",
   "config.maidbridge.websocket_access_token": "WebSocket 验证 Token",
   "config.maidbridge.websocket_access_token.tooltip": "外部 MaidBridge 客户端连接 WebSocket 服务时使用的可选 Bearer Token。",
-  "config.maidbridge.bridge_deadline_ms": "协议超时毫秒",
   "config.maidbridge.max_bridge_message_bytes": "单帧最大字节数",
   "config.maidbridge.max_outbound_frames": "出站队列上限",
   "config.maidbridge.max_buffered_events": "事件缓存上限",
@@ -45,5 +44,15 @@
   "config.maidbridge.max_pending_inbound_gateway_messages": "入站网关队列上限",
   "config.maidbridge.source_endpoint": "本端端点 ID",
   "config.maidbridge.target_endpoint": "目标端点 ID",
+  "gui.maidbridge.chat.button.mode.tip": "女仆聊天接管模式",
+  "gui.maidbridge.chat.button.mode.native": "TLM 原生",
+  "gui.maidbridge.chat.button.mode.external": "外部 Agent",
+  "gui.maidbridge.chat.button.mode.tlm_bridge": "TLM+Bridge",
+  "gui.maidbridge.chat.button.agent.tip": "外部 Agent 选择",
+  "gui.maidbridge.chat.popup.mode": "模式",
+  "gui.maidbridge.chat.popup.agent": "外部 Agent",
+  "gui.maidbridge.chat.popup.refresh": "刷新连接",
+  "gui.maidbridge.chat.summary.no_agent": "未连接",
+  "gui.maidbridge.chat.summary.external_agent": "外部 Agent：%s",
   "item.maidbridge.maid_uuid_probe": "获取女仆 UUID"
 }

@@ -6,6 +6,7 @@ public record BridgeSessionInitialize(
         String id,
         String traceId,
         String clientName,
+        String agentId,
         List<String> roles,
         List<String> subscriptions
 ) {

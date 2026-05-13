@@ -40,12 +40,12 @@ public final class MaidBridgeDebugReports {
                 snapshot.port(),
                 snapshot.path(),
                 snapshot.connectedClients(),
-                display(snapshot.activeAgentSessionId())
+                activeAgentDisplay(snapshot)
         ));
         lines.add("模式=%s 消息桥接=%s 外部agent=%s API查询=%s API写入=%s pendingTTL毫秒=%d".formatted(
                 maidBridgeMode(),
                 Config.enableMaidMessageBridge,
-                Config.enableExternalMaidAgentTurns,
+                Config.isExternalMaidAgentMode(),
                 Config.enableMaidApiExposure,
                 Config.enableMaidApiActions,
                 Config.maidExternalTurnTtlMs
@@ -80,7 +80,7 @@ public final class MaidBridgeDebugReports {
                 snapshot.host(),
                 snapshot.port(),
                 snapshot.path(),
-                display(snapshot.activeAgentSessionId())
+                activeAgentDisplay(snapshot)
         ));
         lines.add("计数 队列=%d 丢弃=%d 网关=%d 重复网关=%d 格式错误=%d 发送失败=%d drop=%d disconnect=%d deadline=%d".formatted(
                 counters.queuedFrames(),
@@ -99,7 +99,7 @@ public final class MaidBridgeDebugReports {
     }
 
     private static String maidBridgeMode() {
-        if (Config.enableExternalMaidAgentTurns) {
+        if (Config.isExternalMaidAgentMode()) {
             return "external_agent";
         }
         if (Config.enableMaidMessageBridge) {
@@ -119,7 +119,7 @@ public final class MaidBridgeDebugReports {
                 snapshot.port(),
                 snapshot.path(),
                 snapshot.connectedClients(),
-                display(snapshot.activeAgentSessionId())
+                activeAgentDisplay(snapshot)
         ));
         lines.add(queuedFrameSummaryLine(snapshot.queuedFrames()));
         return List.copyOf(lines);
@@ -174,9 +174,10 @@ public final class MaidBridgeDebugReports {
         var lines = new ArrayList<String>();
         lines.add("客户端 %d".formatted(clients.size()));
         for (BridgeTransportSnapshot.Client client : clients) {
-            lines.add("- 会话=%s 名称=%s 角色=%s 订阅=%s 活动agent=%s 打开=%s".formatted(
+            lines.add("- 会话=%s 名称=%s agent=%s 角色=%s 订阅=%s 活动agent=%s 打开=%s".formatted(
                     client.sessionId(),
                     display(client.clientName()),
+                    display(client.agentId()),
                     join(client.roles()),
                     join(client.subscriptions()),
                     client.activeAgent(),
@@ -330,6 +331,15 @@ public final class MaidBridgeDebugReports {
             return "-";
         }
         return String.valueOf(value);
+    }
+
+    private static String activeAgentDisplay(BridgeTransportSnapshot snapshot) {
+        for (BridgeTransportSnapshot.Client client : snapshot.clients()) {
+            if (client.activeAgent()) {
+                return firstNonBlank(client.agentId(), client.clientName(), client.sessionId());
+            }
+        }
+        return display(snapshot.activeAgentSessionId());
     }
 
     private static String displayValue(Object value) {

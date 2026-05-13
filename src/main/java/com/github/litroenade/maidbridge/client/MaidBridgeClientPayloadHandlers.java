@@ -4,6 +4,7 @@ import com.github.litroenade.maidbridge.maid.ai.chat.client.MaidAIChatAttributio
 import com.github.litroenade.maidbridge.maid.ai.chat.client.MaidAIChatClientAccessState;
 import com.github.litroenade.maidbridge.network.MaidBridgeClientPayloadDispatch;
 import com.github.litroenade.maidbridge.network.OpenReadonlyMaidAIChatPacket;
+import com.github.litroenade.maidbridge.network.SyncMaidBridgeAgentStatePacket;
 import com.github.litroenade.maidbridge.network.SyncMaidAIChatAttributionsPacket;
 import com.github.tartaricacid.touhoulittlemaid.client.gui.entity.maid.ai.AIChatScreen;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
@@ -21,13 +22,14 @@ public final class MaidBridgeClientPayloadHandlers {
     public static void register() {
         MaidBridgeClientPayloadDispatch.register(
                 MaidBridgeClientPayloadHandlers::handleSyncMaidAIChatAttributions,
-                MaidBridgeClientPayloadHandlers::handleOpenReadonlyMaidAIChat
+                MaidBridgeClientPayloadHandlers::handleOpenReadonlyMaidAIChat,
+                MaidBridgeClientPayloadHandlers::handleSyncMaidBridgeAgentState
         );
     }
 
     public static void handleSyncMaidAIChatAttributions(SyncMaidAIChatAttributionsPacket packet) {
         MaidAIChatAttributionClientCache.replaceEntries(packet.maidUuid(), packet.entries());
-        MaidAIChatClientAccessState.setChatOnly(packet.maidUuid(), packet.chatOnly());
+        MaidAIChatClientAccessState.setAccessState(packet.maidUuid(), packet.chatOnly());
     }
 
     public static void handleOpenReadonlyMaidAIChat(OpenReadonlyMaidAIChatPacket packet) {
@@ -45,7 +47,7 @@ public final class MaidBridgeClientPayloadHandlers {
         }
 
         MaidAIChatAttributionClientCache.replaceEntries(packet.maidUuid(), packet.attributionEntries());
-        MaidAIChatClientAccessState.setChatOnly(packet.maidUuid(), true);
+        MaidAIChatClientAccessState.setAccessState(packet.maidUuid(), true);
         var aiChatManager = maid.getAiChatManager();
         aiChatManager.readFromTag(packet.historyData());
         aiChatManager.llmSite = "";
@@ -60,5 +62,9 @@ public final class MaidBridgeClientPayloadHandlers {
         var chatScreen = new AIChatScreen(maid);
         chatScreen.updateTokens(packet.currentTokens(), packet.maxTokens());
         minecraft.setScreen(chatScreen);
+    }
+
+    public static void handleSyncMaidBridgeAgentState(SyncMaidBridgeAgentStatePacket packet) {
+        MaidAIChatClientAccessState.setBridgeAgentState(packet.chatMode(), packet.activeAgentId(), packet.agentIds());
     }
 }

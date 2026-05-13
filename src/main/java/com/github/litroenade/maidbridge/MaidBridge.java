@@ -34,6 +34,7 @@ public final class MaidBridge {
         initRegister(modEventBus);
         registerConfiguration(modContainer);
         registerGameEvents();
+        MaidBridgeNetwork.setWebSocketRestartHandler(bridgeTransport::restartCurrentServer);
         // WebSocket 启动依赖 MinecraftServer，交给服务端生命周期处理。
         new BridgeTransportLifecycle(bridgeTransport).register(modEventBus);
     }

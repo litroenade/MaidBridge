@@ -45,7 +45,7 @@ public final class MaidAgentTurnRequest {
     }
 
     public static EmitResult emit(Object chatManager, String message, Object clientInfo, Object sender) {
-        if (!Config.enableExternalMaidAgentTurns) {
+        if (!Config.isExternalMaidAgentMode()) {
             return new EmitResult(EmitStatus.DISABLED, "", "", "external_maid_agent_turns_disabled");
         }
         Object maid = ReflectiveAccess.invoke(chatManager, "getMaid");
@@ -68,7 +68,7 @@ public final class MaidAgentTurnRequest {
     }
 
     public static void emitInjectedTurn(Object maid, String message, MaidClientInfo clientInfo, String turnId, String requestId) {
-        if (!Config.enableExternalMaidAgentTurns) {
+        if (!Config.isExternalMaidAgentMode()) {
             throw new IllegalArgumentException("外部女仆 agent 轮次未启用");
         }
         var payload = payloadFromMaid(maid, message, clientInfo, turnId, requestId);

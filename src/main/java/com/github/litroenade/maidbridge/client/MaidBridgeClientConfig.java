@@ -113,12 +113,6 @@ public final class MaidBridgeClientConfig {
     }
 
     private static void debugProtocolEntries(ConfigEntrySink sink, ConfigEntryBuilder entries) {
-        sink.add(entries.startIntField(Component.translatable("config.maidbridge.bridge_deadline_ms"), Config.bridgeDeadlineMs)
-                .setDefaultValue(30000)
-                .setMin(1000)
-                .setMax(300000)
-                .setSaveConsumer(Config::setBridgeDeadlineMs)
-                .build());
         sink.add(entries.startIntField(Component.translatable("config.maidbridge.max_bridge_message_bytes"), Config.maxBridgeMessageBytes)
                 .setDefaultValue(32768)
                 .setMin(1024)

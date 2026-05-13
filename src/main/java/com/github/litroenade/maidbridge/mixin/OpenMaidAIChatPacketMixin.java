@@ -5,6 +5,7 @@ import com.github.litroenade.maidbridge.maid.ai.chat.MaidAIChatServerAccessState
 import com.github.litroenade.maidbridge.network.MaidBridgeNetwork;
 import com.github.litroenade.maidbridge.network.OpenReadonlyMaidAIChatPacket;
 import com.github.litroenade.maidbridge.network.SyncMaidAIChatAttributionsPacket;
+import com.github.litroenade.maidbridge.network.SyncMaidBridgeAgentStatePacket;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.network.NetworkHandler;
 import com.github.tartaricacid.touhoulittlemaid.network.message.ai.OpenMaidAIChatPacket;
@@ -37,6 +38,7 @@ public abstract class OpenMaidAIChatPacketMixin {
         }
         if (MaidAIChatAccess.canEditSettings(maid, player)) {
             MaidAIChatServerAccessState.clearChatOnly(player);
+            MaidBridgeNetwork.sendToClientPlayer(SyncMaidBridgeAgentStatePacket.current(), player);
             MaidBridgeNetwork.sendToClientPlayer(SyncMaidAIChatAttributionsPacket.from(maid, player), player);
             NetworkHandler.sendToClientPlayer(new SyncMaidAIDataPacket(maid, player), player);
             ci.cancel();
@@ -44,6 +46,7 @@ public abstract class OpenMaidAIChatPacketMixin {
         }
         if (MaidAIChatAccess.canOpenChat(maid, player)) {
             MaidAIChatServerAccessState.setChatOnly(player, maid.getUUID());
+            MaidBridgeNetwork.sendToClientPlayer(SyncMaidBridgeAgentStatePacket.current(), player);
             MaidBridgeNetwork.sendToClientPlayer(OpenReadonlyMaidAIChatPacket.from(maid, player), player);
             ci.cancel();
         }

@@ -256,6 +256,7 @@ final class WebSocketBridgeServer {
             return new BridgeTransportSnapshot.Client(
                     id,
                     currentSessionInitialize == null ? "" : currentSessionInitialize.clientName(),
+                    currentSessionInitialize == null ? "" : currentSessionInitialize.agentId(),
                     currentSessionInitialize == null ? List.of() : List.copyOf(currentSessionInitialize.roles()),
                     currentSessionInitialize == null ? List.of() : List.copyOf(currentSessionInitialize.subscriptions()),
                     activeAgent,

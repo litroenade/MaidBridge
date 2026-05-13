@@ -18,6 +18,9 @@ public final class Config {
     public static final String DEFAULT_GATEWAY_CHAT_ROOM_NAME = "Minecraft Server";
     public static final String DEFAULT_INBOUND_GATEWAY_MESSAGE_PREFIX = "[Bridge] ";
     public static final String DEFAULT_MAID_INJECTION_POLICY = "owner_online";
+    public static final String MAID_CHAT_MODE_NATIVE = "native";
+    public static final String MAID_CHAT_MODE_EXTERNAL_AGENT = "external_agent";
+    public static final String MAID_CHAT_MODE_TLM_BRIDGE = "tlm_bridge";
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
     private static final ModConfigSpec.BooleanValue ENABLE_AI_CHAIN_CAPTURE = BUILDER
@@ -108,6 +111,10 @@ public final class Config {
             .comment("让 MaidBridge 把 MaidAIChatManager.chat 入口交给外部女仆 agent，而不是走女仆本体原生 AIChat。")
             .define("enableExternalMaidAgentTurns", false);
 
+    private static final ModConfigSpec.ConfigValue<String> MAID_AGENT_TURN_MODE = BUILDER
+            .comment("女仆聊天接管模式：native 使用 TLM 原生，external_agent 强制外部 agent，tlm_bridge 预留 TLM+Bridge 模式，当前按原生链路处理。")
+            .define("maidAgentTurnMode", MAID_CHAT_MODE_NATIVE);
+
     private static final ModConfigSpec.BooleanValue BRIDGE_SERVER_ENABLED = BUILDER
             .comment("把 MaidBridge 作为 WebSocket 服务端运行，接受外部 maidbridge.maid 客户端。")
             .define("bridgeServerEnabled", false);
@@ -131,10 +138,6 @@ public final class Config {
     private static final ModConfigSpec.ConfigValue<String> BRIDGE_ACCESS_TOKEN = BUILDER
             .comment("MaidBridge WebSocket 客户端可选的 Bearer Token 校验值。")
             .define("bridgeAccessToken", "");
-
-    private static final ModConfigSpec.IntValue BRIDGE_DEADLINE_MS = BUILDER
-            .comment("桥接协议帧默认携带的超时时间。")
-            .defineInRange("bridgeDeadlineMs", 30000, 1000, 300000);
 
     private static final ModConfigSpec.IntValue MAX_BRIDGE_MESSAGE_BYTES = BUILDER
             .comment("单个序列化桥接帧允许的最大 UTF-8 字节数。")
@@ -175,6 +178,7 @@ public final class Config {
     public static int maxPendingMaidOperationsPerKey = 64;
     public static String sourceEndpoint = DEFAULT_SOURCE_ENDPOINT;
     public static String targetEndpoint = DEFAULT_TARGET_ENDPOINT;
+    public static String maidAgentTurnMode = MAID_CHAT_MODE_NATIVE;
     public static boolean enableExternalMaidAgentTurns;
     public static boolean bridgeServerEnabled;
     public static String bridgeServerUrl = DEFAULT_BRIDGE_SERVER_URL;
@@ -182,7 +186,6 @@ public final class Config {
     public static int bridgeServerPort = DEFAULT_BRIDGE_SERVER_PORT;
     public static String bridgeServerPath = DEFAULT_BRIDGE_SERVER_PATH;
     public static String bridgeAccessToken = "";
-    public static int bridgeDeadlineMs = 30000;
     public static int maxBridgeMessageBytes = 32768;
     public static int maxOutboundFrames = 512;
     public static int maxBufferedEvents = 512;
@@ -192,7 +195,7 @@ public final class Config {
     }
 
     public static boolean isExternalMaidAgentMode() {
-        return enableExternalMaidAgentTurns;
+        return MAID_CHAT_MODE_EXTERNAL_AGENT.equals(maidAgentTurnMode) || enableExternalMaidAgentTurns;
     }
 
     public static void setEnableGatewayChatCapture(boolean value) {
@@ -275,6 +278,19 @@ public final class Config {
         setAndSave(TARGET_ENDPOINT, value);
     }
 
+    public static void setMaidAgentTurnMode(String value) {
+        var normalizedMode = normalizeMaidAgentTurnMode(value);
+        MAID_AGENT_TURN_MODE.set(normalizedMode);
+        ENABLE_EXTERNAL_MAID_AGENT_TURNS.set(MAID_CHAT_MODE_EXTERNAL_AGENT.equals(normalizedMode));
+        MAID_AGENT_TURN_MODE.save();
+        ENABLE_EXTERNAL_MAID_AGENT_TURNS.save();
+        refreshFromSpec();
+    }
+
+    public static void setEnableExternalMaidAgentTurns(boolean value) {
+        setMaidAgentTurnMode(value ? MAID_CHAT_MODE_EXTERNAL_AGENT : MAID_CHAT_MODE_NATIVE);
+    }
+
     public static void setBridgeServerEnabled(boolean value) {
         setAndSave(BRIDGE_SERVER_ENABLED, value);
     }
@@ -291,10 +307,6 @@ public final class Config {
 
     public static void setBridgeAccessToken(String value) {
         setAndSave(BRIDGE_ACCESS_TOKEN, value);
-    }
-
-    public static void setBridgeDeadlineMs(int value) {
-        setAndSave(BRIDGE_DEADLINE_MS, value);
     }
 
     public static void setMaxBridgeMessageBytes(int value) {
@@ -335,7 +347,11 @@ public final class Config {
         maxPendingMaidOperationsPerKey = MAX_PENDING_MAID_OPERATIONS_PER_KEY.get();
         sourceEndpoint = SOURCE_ENDPOINT.get();
         targetEndpoint = normalizeTargetEndpoint(TARGET_ENDPOINT.get());
-        enableExternalMaidAgentTurns = ENABLE_EXTERNAL_MAID_AGENT_TURNS.get();
+        maidAgentTurnMode = normalizeMaidAgentTurnMode(MAID_AGENT_TURN_MODE.get());
+        if (MAID_CHAT_MODE_NATIVE.equals(maidAgentTurnMode) && ENABLE_EXTERNAL_MAID_AGENT_TURNS.get()) {
+            maidAgentTurnMode = MAID_CHAT_MODE_EXTERNAL_AGENT;
+        }
+        enableExternalMaidAgentTurns = MAID_CHAT_MODE_EXTERNAL_AGENT.equals(maidAgentTurnMode);
         bridgeServerEnabled = BRIDGE_SERVER_ENABLED.get();
         var endpoint = bridgeServerEndpoint();
         bridgeServerUrl = endpoint.url();
@@ -343,7 +359,6 @@ public final class Config {
         bridgeServerPort = endpoint.port();
         bridgeServerPath = endpoint.path();
         bridgeAccessToken = BRIDGE_ACCESS_TOKEN.get();
-        bridgeDeadlineMs = BRIDGE_DEADLINE_MS.get();
         maxBridgeMessageBytes = MAX_BRIDGE_MESSAGE_BYTES.get();
         maxOutboundFrames = MAX_OUTBOUND_FRAMES.get();
         maxBufferedEvents = MAX_BUFFERED_EVENTS.get();
@@ -368,6 +383,16 @@ public final class Config {
             return DEFAULT_TARGET_ENDPOINT;
         }
         return value;
+    }
+
+    private static String normalizeMaidAgentTurnMode(String value) {
+        var normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case MAID_CHAT_MODE_EXTERNAL_AGENT, MAID_CHAT_MODE_TLM_BRIDGE -> normalized;
+            // 旧版本短暂使用过 auto；这里保留迁移，避免旧配置退回 native。
+            case "auto" -> MAID_CHAT_MODE_TLM_BRIDGE;
+            default -> MAID_CHAT_MODE_NATIVE;
+        };
     }
 
     private static BridgeServerEndpoint bridgeServerEndpoint() {

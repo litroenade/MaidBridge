@@ -34,7 +34,15 @@ public final class BridgeTransportLifecycle {
         if (Boolean.getBoolean(DISABLE_AUTO_START_WS_PROPERTY)) {
             MaidBridge.LOGGER.info("MaidBridge WebSocket 自动启动已被系统属性关闭 property={}", DISABLE_AUTO_START_WS_PROPERTY);
         } else {
-            bridgeTransport.start(event.getServer());
+            try {
+                bridgeTransport.start(event.getServer());
+            } catch (RuntimeException exception) {
+                MaidBridge.LOGGER.error("启动 MaidBridge WebSocket 失败，请检查监听地址是否可用或端口是否被占用 [端点=ws://{}:{}{}]",
+                        Config.bridgeServerHost,
+                        Config.bridgeServerPort,
+                        Config.bridgeServerPath,
+                        exception);
+            }
         }
         AiChainEventSink.setConsumer(bridgeTransport::publish);
         AiChainEventSink.emitLifecycle("maidbridge.server.started", event.getServer().getServerModName());

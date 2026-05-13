@@ -31,7 +31,6 @@
   "config.maidbridge.log_captured_events": "Log Captured Events",
   "config.maidbridge.websocket_access_token": "WebSocket Verification Token",
   "config.maidbridge.websocket_access_token.tooltip": "Optional Bearer Token used by external MaidBridge clients when connecting to the WebSocket server.",
-  "config.maidbridge.bridge_deadline_ms": "Protocol Timeout Milliseconds",
   "config.maidbridge.max_bridge_message_bytes": "Max Frame Bytes",
   "config.maidbridge.max_outbound_frames": "Outbound Queue Limit",
   "config.maidbridge.max_buffered_events": "Event Buffer Limit",
@@ -45,5 +44,15 @@
   "config.maidbridge.max_pending_inbound_gateway_messages": "Inbound Gateway Queue Limit",
   "config.maidbridge.source_endpoint": "Local Endpoint ID",
   "config.maidbridge.target_endpoint": "Target Endpoint ID",
+  "gui.maidbridge.chat.button.mode.tip": "Maid chat handoff mode",
+  "gui.maidbridge.chat.button.mode.native": "TLM Native",
+  "gui.maidbridge.chat.button.mode.external": "External Agent",
+  "gui.maidbridge.chat.button.mode.tlm_bridge": "TLM+Bridge",
+  "gui.maidbridge.chat.button.agent.tip": "External Agent selector",
+  "gui.maidbridge.chat.popup.mode": "Mode",
+  "gui.maidbridge.chat.popup.agent": "External Agent",
+  "gui.maidbridge.chat.popup.refresh": "Refresh",
+  "gui.maidbridge.chat.summary.no_agent": "Disconnected",
+  "gui.maidbridge.chat.summary.external_agent": "External Agent: %s",
   "item.maidbridge.maid_uuid_probe": "Maid UUID Probe"
 }

@@ -3,9 +3,12 @@ package com.github.litroenade.maidbridge.transport;
 import com.github.litroenade.maidbridge.Config;
 import com.github.litroenade.maidbridge.MaidBridge;
 import com.github.litroenade.maidbridge.maid.api.MaidApiRequestDispatcher;
+import com.github.litroenade.maidbridge.maid.ai.chat.MaidExternalAgentDisplayState;
 import com.github.litroenade.maidbridge.maid.message.MaidMessageDispatcher;
 import com.github.litroenade.maidbridge.maid.turn.MaidAgentTurnCompleteDispatcher;
 import com.github.litroenade.maidbridge.maid.turn.MaidExternalTurnGuard;
+import com.github.litroenade.maidbridge.network.MaidBridgeNetwork;
+import com.github.litroenade.maidbridge.network.SyncMaidBridgeAgentStatePacket;
 import com.github.litroenade.maidbridge.protocol.BridgeFrameBuilder;
 import com.github.litroenade.maidbridge.protocol.BridgeInboundParser;
 import com.github.litroenade.maidbridge.protocol.BridgeProtocol;
@@ -63,10 +66,12 @@ public final class BridgeTransport {
                 webSocketServer = startingServer;
             }
             started = true;
+            syncAgentStateToClients();
         } catch (RuntimeException exception) {
             started = false;
             this.server = null;
             activeAgentTracker.clear();
+            MaidExternalAgentDisplayState.clearActiveAgentId();
             if (startingServer != null) {
                 startingServer.stop();
             }
@@ -77,12 +82,13 @@ public final class BridgeTransport {
 
     public void stop() {
         started = false;
-        server = null;
         var activeAgent = activeAgentTracker.activeSession(webSocketServer);
         if (activeAgent != null) {
             releaseDisconnectedTurns(activeAgent.id(), "bridge_transport_stopped");
         }
         activeAgentTracker.clear();
+        syncAgentStateToClients();
+        server = null;
         if (webSocketServer != null) {
             webSocketServer.stop();
             webSocketServer = null;
@@ -150,8 +156,8 @@ public final class BridgeTransport {
         var currentServer = webSocketServer;
         var webSocketRunning = currentServer != null && currentServer.isStarted();
         var activeAgent = activeAgentTracker.activeSession(currentServer);
-        var activeAgentId = activeAgent == null ? "" : activeAgent.id();
-        var clients = currentServer == null ? List.<BridgeTransportSnapshot.Client>of() : currentServer.clientSnapshots(activeAgentId);
+        var activeAgentSessionId = activeAgent == null ? "" : activeAgent.id();
+        var clients = currentServer == null ? List.<BridgeTransportSnapshot.Client>of() : currentServer.clientSnapshots(activeAgentSessionId);
         return new BridgeTransportSnapshot(
                 started,
                 Config.bridgeServerEnabled,
@@ -160,7 +166,7 @@ public final class BridgeTransport {
                 Config.bridgeServerPort,
                 Config.bridgeServerPath,
                 clients.size(),
-                activeAgentId,
+                activeAgentSessionId,
                 clients,
                 outboundQueue.summarizeByType().stream()
                         .map(summary -> new BridgeTransportSnapshot.QueuedFrame(summary.type(), summary.count()))
@@ -309,6 +315,9 @@ public final class BridgeTransport {
                 return;
             }
             session.setSessionInitialize(sessionInitialize);
+            if (BridgeRoutingRules.canReceiveAgentTurnRequests(sessionInitialize)) {
+                syncAgentStateToClients();
+            }
             var serverName = server == null ? "Minecraft 服务器" : server.getServerModName();
             sendDirect(session, BridgeFrameBuilder.sessionReadyFrame(serverName, sessionInitialize.id(), sessionInitialize.traceId()));
             flushQueuedToSession(session);
@@ -645,6 +654,7 @@ public final class BridgeTransport {
         if (!activeAgentTracker.releaseIfOwned(session)) {
             return;
         }
+        syncAgentStateToClients();
         releaseDisconnectedTurns(session.id(), "active_agent_disconnected");
     }
 
@@ -683,6 +693,35 @@ public final class BridgeTransport {
         var turnId = payload.get("turn_id");
         if (turnId != null && !String.valueOf(turnId).isBlank()) {
             return String.valueOf(turnId);
+        }
+        return "";
+    }
+
+    private void syncAgentStateToClients() {
+        var activeAgent = activeAgentTracker.activeSession(webSocketServer);
+        var activeAgentId = agentDisplayName(activeAgent);
+        var agentIds = activeAgentId.isBlank() ? List.<String>of() : List.of(activeAgentId);
+        MaidExternalAgentDisplayState.replaceAgents(agentIds, activeAgentId);
+        var packet = SyncMaidBridgeAgentStatePacket.current();
+        var currentServer = server;
+        if (currentServer != null) {
+            currentServer.execute(() -> MaidBridgeNetwork.sendToAllPlayers(packet));
+        }
+    }
+
+    private static String agentDisplayName(WebSocketBridgeServer.Session session) {
+        if (session == null || session.sessionInitialize() == null) {
+            return "";
+        }
+        var sessionInitialize = session.sessionInitialize();
+        return firstNonBlank(sessionInitialize.agentId(), sessionInitialize.clientName(), session.id());
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (var value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
         }
         return "";
     }

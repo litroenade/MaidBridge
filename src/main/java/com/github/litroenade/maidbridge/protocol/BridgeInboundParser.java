@@ -87,6 +87,7 @@ public final class BridgeInboundParser {
                 requiredString(json, "id"),
                 optionalString(json, "trace_id"),
                 firstNonBlank(optionalString(payload, "client_name"), optionalString(payload, "name"), optionalString(payload, "client_id"), optionalString(json, "source_endpoint")),
+                firstNonBlank(optionalString(payload, "agent_id"), optionalString(payload, "agentId"), optionalString(payload, "client_name"), optionalString(payload, "name")),
                 optionalStringList(payload, "roles"),
                 optionalStringList(payload, "subscriptions")
         );
