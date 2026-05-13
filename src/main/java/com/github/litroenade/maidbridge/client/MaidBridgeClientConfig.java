@@ -148,6 +148,12 @@ public final class MaidBridgeClientConfig {
                 .setMax(1800000)
                 .setSaveConsumer(Config::setMaidExternalTurnTtlMs)
                 .build());
+        sink.add(entries.startIntField(Component.translatable("config.maidbridge.max_pending_maid_agent_turns"), Config.maxPendingMaidAgentTurns)
+                .setDefaultValue(256)
+                .setMin(1)
+                .setMax(4096)
+                .setSaveConsumer(Config::setMaxPendingMaidAgentTurns)
+                .build());
         sink.add(entries.startStrField(Component.translatable("config.maidbridge.maid_injection_policy"), Config.maidInjectionPolicy)
                 .setDefaultValue(Config.DEFAULT_MAID_INJECTION_POLICY)
                 .setSaveConsumer(Config::setMaidInjectionPolicy)

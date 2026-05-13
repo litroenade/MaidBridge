@@ -55,10 +55,12 @@ public record SetExternalMaidAgentModePacket(
         }
     }
 
+    @SuppressWarnings("resource")
     private static void handle(SetExternalMaidAgentModePacket packet, @Nullable ServerPlayer player) {
         if (player == null) {
             return;
         }
+        // Level 由 Minecraft 生命周期管理，这里只查询实体，不能用 try-with-resources 关闭。
         Entity entity = player.level().getEntity(packet.entityId);
         if (!(entity instanceof EntityMaid maid) || !maid.isAlive() || !MaidAIChatAccess.canEditSettings(maid, player)) {
             return;

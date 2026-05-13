@@ -1,6 +1,5 @@
 package com.github.litroenade.maidbridge.maid.turn;
 
-import com.github.litroenade.maidbridge.MaidBridge;
 import com.github.litroenade.maidbridge.trace.AiChainEventSink;
 import com.github.litroenade.maidbridge.maid.api.MaidActionExecutor;
 import com.github.litroenade.maidbridge.maid.api.MaidApiReflection;
@@ -41,7 +40,7 @@ public final class MaidAgentTurnCompleteFacade {
     }
 
     public static Map<String, Object> applyReply(MinecraftServer server, MaidAgentTurnComplete result) {
-        var pendingTurn = MaidExternalTurnGuard.findExternalTurn(result.maidUuid(), result.turnId());
+        var pendingTurn = MaidExternalTurnGuard.completeExternalTurn(result.maidUuid(), result.turnId());
         if (pendingTurn == null) {
             throw new IllegalArgumentException("没有待处理的外部女仆轮次 turn_id=" + result.turnId());
         }
@@ -65,12 +64,9 @@ public final class MaidAgentTurnCompleteFacade {
             var ownerDelivered = ttsDispatch.dispatched() ? ownerOnline(maid) : deliverChatText(maid, result.chatText());
             var historyAppended = appendHistoryIfRequested(maid, result.chatText(), historyPolicy);
 
-            var completedTurn = MaidExternalTurnGuard.completeExternalTurn(result.maidUuid(), result.turnId());
-            var completed = completedTurn != null ? completedTurn : pendingTurn;
-            emitMaidMessageOut(result, completed, maid, actionResults, ttsDispatch);
-            return responsePayload(result, completed, maid, ownerDelivered, historyAppended, actionResults, ttsDispatch, System::currentTimeMillis);
+            emitMaidMessageOut(result, pendingTurn, maid, actionResults, ttsDispatch);
+            return responsePayload(result, pendingTurn, maid, ownerDelivered, historyAppended, actionResults, ttsDispatch, System::currentTimeMillis);
         } catch (RuntimeException exception) {
-            releasePendingTurnAfterFailure(result, pendingTurn);
             throw turnFailure(result, exception);
         }
     }
@@ -84,20 +80,6 @@ public final class MaidAgentTurnCompleteFacade {
             return "";
         } catch (RuntimeException exception) {
             return exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
-        }
-    }
-
-    private static void releasePendingTurnAfterFailure(MaidAgentTurnComplete result, MaidExternalTurnGuard.ActiveTurn pendingTurn) {
-        var released = MaidExternalTurnGuard.completeExternalTurn(
-                firstNonBlank(result.maidUuid(), pendingTurn.maidUuid()),
-                result.turnId()
-        );
-        if (released != null) {
-            MaidBridge.LOGGER.warn(
-                    "结果处理失败后已释放待处理外部女仆轮次 turnId={} requestId={}",
-                    released.turnId(),
-                    released.requestId()
-            );
         }
     }
 

@@ -35,6 +35,7 @@
   "config.maidbridge.max_outbound_frames": "Outbound Queue Limit",
   "config.maidbridge.max_buffered_events": "Event Buffer Limit",
   "config.maidbridge.maid_external_turn_ttl_ms": "External Maid Turn TTL",
+  "config.maidbridge.max_pending_maid_agent_turns": "External Maid Turn Queue Limit",
   "config.maidbridge.maid_injection_policy": "Maid Message Injection Policy",
   "config.maidbridge.enable_maid_api_exposure": "Expose Maid API Queries",
   "config.maidbridge.enable_maid_api_actions": "Allow Maid API Write Actions",

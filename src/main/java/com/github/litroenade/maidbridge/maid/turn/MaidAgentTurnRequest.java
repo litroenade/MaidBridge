@@ -51,18 +51,19 @@ public final class MaidAgentTurnRequest {
         Object maid = ReflectiveAccess.invoke(chatManager, "getMaid");
         var payload = payload(maid, message, clientInfo, sender);
         var turnIdentity = turnIdentity(payload);
-        if (MaidExternalTurnGuard.beginExternalTurn(
+        var beginResult = MaidExternalTurnGuard.tryBeginExternalTurn(
                 turnIdentity.maidUuid(),
                 turnIdentity.turnId(),
                 turnIdentity.requestId(),
                 safeString(message),
                 mapPayload(payload.get("speaker"))
-        )) {
+        );
+        if (beginResult.accepted()) {
             writeUserHistory(chatManager, message, sender, mapPayload(payload.get("speaker")));
             AiChainEventSink.emit(EVENT_TYPE, payload);
             return new EmitResult(EmitStatus.EMITTED, turnIdentity.maidUuid(), turnIdentity.turnId(), "");
         }
-        var reason = "maid_external_turn_pending";
+        var reason = rejectReason(beginResult.status());
         emitRejected(payload, reason);
         return new EmitResult(EmitStatus.BUSY, turnIdentity.maidUuid(), turnIdentity.turnId(), reason);
     }
@@ -73,18 +74,27 @@ public final class MaidAgentTurnRequest {
         }
         var payload = payloadFromMaid(maid, message, clientInfo, turnId, requestId);
         var turnIdentity = turnIdentity(payload);
-        if (MaidExternalTurnGuard.beginExternalTurn(
+        var beginResult = MaidExternalTurnGuard.tryBeginExternalTurn(
                 turnIdentity.maidUuid(),
                 turnIdentity.turnId(),
                 turnIdentity.requestId(),
                 safeString(message),
                 mapPayload(payload.get("speaker"))
-        )) {
+        );
+        if (beginResult.accepted()) {
             writeUserHistory(MaidApiReflection.invoke(maid, "getAiChatManager"), message, null, mapPayload(payload.get("speaker")));
             AiChainEventSink.emit(EVENT_TYPE, payload);
             return;
         }
-        throw new IllegalArgumentException("女仆已有待处理的外部 agent 轮次");
+        throw new IllegalArgumentException("外部女仆 agent 轮次被拒绝：" + rejectReason(beginResult.status()));
+    }
+
+    private static String rejectReason(MaidExternalTurnGuard.BeginStatus status) {
+        return switch (status) {
+            case DUPLICATE_PENDING -> "maid_external_turn_duplicate_pending";
+            case QUEUE_FULL -> "maid_external_turn_queue_full";
+            case ACCEPTED -> "";
+        };
     }
 
     private static void emitRejected(Map<String, Object> originalPayload, String reason) {
@@ -203,8 +213,9 @@ public final class MaidAgentTurnRequest {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("language", clean(ReflectiveAccess.invoke(clientInfo, "language")));
         payload.put("name", clean(ReflectiveAccess.invoke(clientInfo, "name")));
-        Object description = ReflectiveAccess.invoke(clientInfo, "description");
-        payload.put("description", unavailable(description) ? List.of() : description);
+        // Object description = ReflectiveAccess.invoke(clientInfo, "description");
+        // payload.put("description", unavailable(description) ? List.of() : description);
+        // 暂时没有较好的插入点，容易造成人设歧义
         return payload;
     }
 

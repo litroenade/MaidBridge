@@ -35,6 +35,7 @@
   "config.maidbridge.max_outbound_frames": "出站队列上限",
   "config.maidbridge.max_buffered_events": "事件缓存上限",
   "config.maidbridge.maid_external_turn_ttl_ms": "外部女仆轮次 TTL",
+  "config.maidbridge.max_pending_maid_agent_turns": "外部女仆轮次队列上限",
   "config.maidbridge.maid_injection_policy": "女仆消息注入策略",
   "config.maidbridge.enable_maid_api_exposure": "暴露女仆 API 查询",
   "config.maidbridge.enable_maid_api_actions": "允许女仆 API 写操作",

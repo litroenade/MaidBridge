@@ -8,20 +8,33 @@ import com.github.litroenade.maidbridge.protocol.frame.MaidTurnIdentity;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
 
 public final class MaidExternalTurnGuard {
     private static final MaidExternalTurnGuard EXTERNAL_INJECTION_GUARD =
-            new MaidExternalTurnGuard(System::currentTimeMillis, () -> Config.maidExternalTurnTtlMs);
+            new MaidExternalTurnGuard(System::currentTimeMillis, () -> Config.maidExternalTurnTtlMs, () -> Config.maxPendingMaidAgentTurns);
 
     private final LongSupplier clock;
     private final LongSupplier ttlMs;
-    private final Map<String, StoredTurn> activeTurns = new HashMap<>();
+    private final IntSupplier maxPendingTurns;
+    private final Map<String, StoredTurn> activeTurns = new LinkedHashMap<>();
+
+    public enum BeginStatus {
+        ACCEPTED,
+        DUPLICATE_PENDING,
+        QUEUE_FULL
+    }
+
+    public record BeginResult(BeginStatus status) {
+        public boolean accepted() {
+            return status == BeginStatus.ACCEPTED;
+        }
+    }
 
     public record ActiveTurn(
             String maidUuid,
@@ -59,13 +72,18 @@ public final class MaidExternalTurnGuard {
     ) {
     }
 
-    private MaidExternalTurnGuard(LongSupplier clock, LongSupplier ttlMs) {
+    private MaidExternalTurnGuard(LongSupplier clock, LongSupplier ttlMs, IntSupplier maxPendingTurns) {
         this.clock = clock;
         this.ttlMs = ttlMs;
+        this.maxPendingTurns = maxPendingTurns;
+    }
+
+    public static BeginResult tryBeginExternalTurn(String maidUuid, String turnId, String requestId, String userMessage, Map<String, Object> clientMetadata) {
+        return EXTERNAL_INJECTION_GUARD.tryBegin(maidUuid, turnId, requestId, userMessage, clientMetadata);
     }
 
     public static boolean beginExternalTurn(String maidUuid, String turnId, String requestId, String userMessage, Map<String, Object> clientMetadata) {
-        return EXTERNAL_INJECTION_GUARD.tryBegin(maidUuid, turnId, requestId, userMessage, clientMetadata);
+        return tryBeginExternalTurn(maidUuid, turnId, requestId, userMessage, clientMetadata).accepted();
     }
 
     public static ActiveTurn completeExternalTurn(String maidUuid, String turnId) {
@@ -96,19 +114,21 @@ public final class MaidExternalTurnGuard {
         return EXTERNAL_INJECTION_GUARD.sweep();
     }
 
-    private synchronized boolean tryBegin(String maidUuid, String turnId, String requestId, String userMessage, Map<String, Object> clientMetadata) {
-        if (maidUuid == null || maidUuid.isBlank()) {
-            throw new IllegalArgumentException("外部注入保护需要非空 maid.uuid");
-        }
-        var key = maidUuid.trim();
+    private synchronized BeginResult tryBegin(String maidUuid, String turnId, String requestId, String userMessage, Map<String, Object> clientMetadata) {
+        var normalizedMaidUuid = requiredMaidUuid(maidUuid);
+        var normalizedTurnId = requiredTurnId(turnId);
+        var key = turnKey(normalizedMaidUuid, normalizedTurnId);
         var now = clock.getAsLong();
         releaseExpired(now);
         if (activeTurns.containsKey(key)) {
-            return false;
+            return new BeginResult(BeginStatus.DUPLICATE_PENDING);
+        }
+        if (activeTurns.size() >= Math.max(1, maxPendingTurns.getAsInt())) {
+            return new BeginResult(BeginStatus.QUEUE_FULL);
         }
         activeTurns.put(key, new StoredTurn(
-                key,
-                safeString(turnId),
+                normalizedMaidUuid,
+                normalizedTurnId,
                 safeString(requestId),
                 safeString(userMessage),
                 immutableMetadata(clientMetadata),
@@ -117,7 +137,7 @@ public final class MaidExternalTurnGuard {
                 "",
                 0L
         ));
-        return true;
+        return new BeginResult(BeginStatus.ACCEPTED);
     }
 
     private synchronized ActiveTurn complete(String maidUuid, String turnId) {
@@ -129,12 +149,8 @@ public final class MaidExternalTurnGuard {
         releaseExpired(clock.getAsLong());
         var normalizedTurnId = requiredTurnId(turnId);
         var normalizedMaidUuid = requiredMaidUuid(maidUuid);
-        for (StoredTurn activeTurn : activeTurns.values()) {
-            if (normalizedMaidUuid.equals(activeTurn.maidUuid()) && normalizedTurnId.equals(activeTurn.turnId())) {
-                return toActiveTurn(activeTurn);
-            }
-        }
-        return null;
+        var activeTurn = activeTurns.get(turnKey(normalizedMaidUuid, normalizedTurnId));
+        return activeTurn == null ? null : toActiveTurn(activeTurn);
     }
 
     private synchronized CompletedTurn releaseIdentity(MaidTurnIdentity identity, String outcome, String reason) {
@@ -176,15 +192,8 @@ public final class MaidExternalTurnGuard {
     }
 
     private CompletedTurn releaseExact(String maidUuid, String turnId, String outcome, String reason) {
-        for (Iterator<Map.Entry<String, StoredTurn>> iterator = activeTurns.entrySet().iterator(); iterator.hasNext(); ) {
-            var entry = iterator.next();
-            var activeTurn = entry.getValue();
-            if (maidUuid.equals(activeTurn.maidUuid()) && turnId.equals(activeTurn.turnId())) {
-                iterator.remove();
-                return completed(activeTurn, outcome, reason);
-            }
-        }
-        return null;
+        var activeTurn = activeTurns.remove(turnKey(maidUuid, turnId));
+        return activeTurn == null ? null : completed(activeTurn, outcome, reason);
     }
 
     private synchronized void markIdentityDelivered(MaidTurnIdentity identity, String sessionId) {
@@ -193,7 +202,7 @@ public final class MaidExternalTurnGuard {
         if (storedTurn == null) {
             return;
         }
-        activeTurns.put(storedTurn.maidUuid(), new StoredTurn(
+        activeTurns.put(turnKey(storedTurn.maidUuid(), storedTurn.turnId()), new StoredTurn(
                 storedTurn.maidUuid(),
                 storedTurn.turnId(),
                 storedTurn.requestId(),
@@ -208,10 +217,7 @@ public final class MaidExternalTurnGuard {
 
     private StoredTurn findStored(MaidTurnIdentity identity) {
         if (!identity.maidUuid().isBlank() && !identity.turnId().isBlank()) {
-            var activeTurn = activeTurns.get(identity.maidUuid());
-            if (activeTurn != null && identity.turnId().equals(activeTurn.turnId())) {
-                return activeTurn;
-            }
+            return activeTurns.get(turnKey(identity.maidUuid(), identity.turnId()));
         }
         if (!identity.requestId().isBlank()) {
             for (StoredTurn activeTurn : activeTurns.values()) {
@@ -290,6 +296,10 @@ public final class MaidExternalTurnGuard {
             throw new IllegalArgumentException("turn_id 不能为空");
         }
         return normalizedTurnId;
+    }
+
+    private static String turnKey(String maidUuid, String turnId) {
+        return requiredMaidUuid(maidUuid) + "\n" + requiredTurnId(turnId);
     }
 
     private static ActiveTurn toActiveTurn(StoredTurn activeTurn) {

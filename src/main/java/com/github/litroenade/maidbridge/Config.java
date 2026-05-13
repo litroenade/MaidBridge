@@ -47,6 +47,10 @@ public final class Config {
             .comment("外部女仆轮次的保留时间；超时后新的外部轮次才可替换它。")
             .defineInRange("maidExternalTurnTtlMs", 120000, 1000, 1800000);
 
+    private static final ModConfigSpec.IntValue MAX_PENDING_MAID_AGENT_TURNS = BUILDER
+            .comment("外部女仆 agent 待处理轮次的全局上限；超过后拒绝新的接管请求，避免外部客户端异常时无限堆积。")
+            .defineInRange("maxPendingMaidAgentTurns", 256, 1, 4096);
+
     private static final ModConfigSpec.ConfigValue<String> MAID_INJECTION_POLICY = BUILDER
             .comment("maid.message.in 注入策略；当前实现支持 owner_online。")
             .define("maidInjectionPolicy", DEFAULT_MAID_INJECTION_POLICY);
@@ -123,18 +127,6 @@ public final class Config {
             .comment("MaidBridge WebSocket 地址，例如 ws://127.0.0.1:8765/maidbridge。")
             .define("bridgeServerUrl", DEFAULT_BRIDGE_SERVER_URL);
 
-    private static final ModConfigSpec.ConfigValue<String> BRIDGE_SERVER_HOST = BUILDER
-            .comment("MaidBridge WebSocket 服务端绑定的主机地址或网卡地址。")
-            .define("bridgeServerHost", DEFAULT_BRIDGE_SERVER_HOST);
-
-    private static final ModConfigSpec.IntValue BRIDGE_SERVER_PORT = BUILDER
-            .comment("MaidBridge WebSocket 服务端监听的 TCP 端口。")
-            .defineInRange("bridgeServerPort", DEFAULT_BRIDGE_SERVER_PORT, 1, 65535);
-
-    private static final ModConfigSpec.ConfigValue<String> BRIDGE_SERVER_PATH = BUILDER
-            .comment("MaidBridge WebSocket 服务端接受的 HTTP 路径。")
-            .define("bridgeServerPath", DEFAULT_BRIDGE_SERVER_PATH);
-
     private static final ModConfigSpec.ConfigValue<String> BRIDGE_ACCESS_TOKEN = BUILDER
             .comment("MaidBridge WebSocket 客户端可选的 Bearer Token 校验值。")
             .define("bridgeAccessToken", "");
@@ -163,6 +155,7 @@ public final class Config {
     public static boolean enableMaidMessageBridge;
     public static boolean enableMultiplayerMaidChat;
     public static int maidExternalTurnTtlMs = 120000;
+    public static int maxPendingMaidAgentTurns = 256;
     public static String maidInjectionPolicy = DEFAULT_MAID_INJECTION_POLICY;
     public static boolean enableMaidApiExposure = true;
     public static boolean enableMaidApiActions = true;
@@ -216,6 +209,10 @@ public final class Config {
 
     public static void setMaidExternalTurnTtlMs(int value) {
         setAndSave(MAID_EXTERNAL_TURN_TTL_MS, value);
+    }
+
+    public static void setMaxPendingMaidAgentTurns(int value) {
+        setAndSave(MAX_PENDING_MAID_AGENT_TURNS, value);
     }
 
     public static void setMaidInjectionPolicy(String value) {
@@ -287,20 +284,13 @@ public final class Config {
         refreshFromSpec();
     }
 
-    public static void setEnableExternalMaidAgentTurns(boolean value) {
-        setMaidAgentTurnMode(value ? MAID_CHAT_MODE_EXTERNAL_AGENT : MAID_CHAT_MODE_NATIVE);
-    }
-
     public static void setBridgeServerEnabled(boolean value) {
         setAndSave(BRIDGE_SERVER_ENABLED, value);
     }
 
     public static void setBridgeServerUrl(String value) {
-        var endpoint = parseBridgeServerUrl(value, bridgeServerEndpoint());
+        var endpoint = parseBridgeServerUrl(value, currentBridgeServerEndpoint());
         BRIDGE_SERVER_URL.set(endpoint.url());
-        BRIDGE_SERVER_HOST.set(endpoint.host());
-        BRIDGE_SERVER_PORT.set(endpoint.port());
-        BRIDGE_SERVER_PATH.set(endpoint.path());
         BRIDGE_SERVER_URL.save();
         refreshFromSpec();
     }
@@ -332,6 +322,7 @@ public final class Config {
         enableMaidMessageBridge = ENABLE_MAID_MESSAGE_BRIDGE.get();
         enableMultiplayerMaidChat = ENABLE_MULTIPLAYER_MAID_CHAT.get();
         maidExternalTurnTtlMs = MAID_EXTERNAL_TURN_TTL_MS.get();
+        maxPendingMaidAgentTurns = MAX_PENDING_MAID_AGENT_TURNS.get();
         maidInjectionPolicy = MAID_INJECTION_POLICY.get();
         enableMaidApiExposure = ENABLE_MAID_API_EXPOSURE.get();
         enableMaidApiActions = ENABLE_MAID_API_ACTIONS.get();
@@ -372,14 +363,14 @@ public final class Config {
     }
 
     private static String normalizeGatewayPrefix(String value) {
-        if (value == null || value.isBlank() || value.toLowerCase(Locale.ROOT).contains("bot")) {
+        if (value == null || value.isBlank()) {
             return DEFAULT_INBOUND_GATEWAY_MESSAGE_PREFIX;
         }
         return value;
     }
 
     private static String normalizeTargetEndpoint(String value) {
-        if (value == null || value.isBlank() || value.toLowerCase(Locale.ROOT).contains("bot-bridge")) {
+        if (value == null || value.isBlank()) {
             return DEFAULT_TARGET_ENDPOINT;
         }
         return value;
@@ -389,26 +380,20 @@ public final class Config {
         var normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
         return switch (normalized) {
             case MAID_CHAT_MODE_EXTERNAL_AGENT, MAID_CHAT_MODE_TLM_BRIDGE -> normalized;
-            // 旧版本短暂使用过 auto；这里保留迁移，避免旧配置退回 native。
-            case "auto" -> MAID_CHAT_MODE_TLM_BRIDGE;
             default -> MAID_CHAT_MODE_NATIVE;
         };
     }
 
     private static BridgeServerEndpoint bridgeServerEndpoint() {
-        var legacyEndpoint = legacyBridgeServerEndpoint();
-        var configuredUrl = BRIDGE_SERVER_URL.get();
-        if (isDefaultBridgeServerUrl(configuredUrl) && !legacyEndpoint.isDefault()) {
-            return legacyEndpoint;
-        }
-        return parseBridgeServerUrl(configuredUrl, legacyEndpoint);
+        return parseBridgeServerUrl(BRIDGE_SERVER_URL.get(), defaultBridgeServerEndpoint());
     }
 
-    private static BridgeServerEndpoint legacyBridgeServerEndpoint() {
-        var host = normalizeBridgeHost(BRIDGE_SERVER_HOST.get());
-        var port = BRIDGE_SERVER_PORT.get();
-        var path = normalizeBridgePath(BRIDGE_SERVER_PATH.get());
-        return new BridgeServerEndpoint(host, port, path);
+    private static BridgeServerEndpoint currentBridgeServerEndpoint() {
+        return new BridgeServerEndpoint(bridgeServerHost, bridgeServerPort, bridgeServerPath);
+    }
+
+    private static BridgeServerEndpoint defaultBridgeServerEndpoint() {
+        return new BridgeServerEndpoint(DEFAULT_BRIDGE_SERVER_HOST, DEFAULT_BRIDGE_SERVER_PORT, DEFAULT_BRIDGE_SERVER_PATH);
     }
 
     private static BridgeServerEndpoint parseBridgeServerUrl(String value, BridgeServerEndpoint fallback) {
@@ -433,10 +418,6 @@ public final class Config {
         }
     }
 
-    private static boolean isDefaultBridgeServerUrl(String value) {
-        return value == null || value.isBlank() || DEFAULT_BRIDGE_SERVER_URL.equalsIgnoreCase(value.trim());
-    }
-
     private static String normalizeBridgeHost(String value) {
         return value == null || value.isBlank() ? DEFAULT_BRIDGE_SERVER_HOST : value.trim();
     }
@@ -449,12 +430,6 @@ public final class Config {
     private record BridgeServerEndpoint(String host, int port, String path) {
         String url() {
             return "ws://%s:%d%s".formatted(urlHost(), port, path);
-        }
-
-        boolean isDefault() {
-            return DEFAULT_BRIDGE_SERVER_HOST.equals(host)
-                    && DEFAULT_BRIDGE_SERVER_PORT == port
-                    && DEFAULT_BRIDGE_SERVER_PATH.equals(path);
         }
 
         private String urlHost() {
