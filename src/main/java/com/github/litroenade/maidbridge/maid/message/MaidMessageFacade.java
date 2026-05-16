@@ -1,6 +1,7 @@
 package com.github.litroenade.maidbridge.maid.message;
 
 import com.github.litroenade.maidbridge.Config;
+import com.github.litroenade.maidbridge.maid.ai.chat.MaidExternalAgentDisplayState;
 import com.github.litroenade.maidbridge.maid.turn.MaidAgentTurnRequest;
 import com.github.litroenade.maidbridge.maid.api.MaidApiReflection;
 import com.github.litroenade.maidbridge.maid.api.MaidEntityLookup;
@@ -43,7 +44,7 @@ public final class MaidMessageFacade {
             throw new IllegalArgumentException("女仆不处于存活状态");
         }
         var maidUuid = maid.getUUID().toString();
-        if (Config.isExternalMaidAgentMode()) {
+        if (Config.isExternalMaidAgentMode() && MaidExternalAgentDisplayState.hasAgent(maid.getUUID())) {
             MaidAgentTurnRequest.emitInjectedTurn(maid, message.text(), message.clientInfo(), message.turnId(), message.id());
             return externalResponsePayload(
                     message,

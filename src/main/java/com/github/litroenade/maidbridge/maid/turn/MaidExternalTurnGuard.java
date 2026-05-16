@@ -84,8 +84,8 @@ public final class MaidExternalTurnGuard {
         return EXTERNAL_INJECTION_GUARD.tryBegin(maidUuid, turnId, requestId, userMessage, clientMetadata);
     }
 
-    public static ActiveTurn completeExternalTurn(String maidUuid, String turnId) {
-        return EXTERNAL_INJECTION_GUARD.complete(maidUuid, turnId);
+    public static void completeExternalTurn(String maidUuid, String turnId) {
+        EXTERNAL_INJECTION_GUARD.complete(maidUuid, turnId);
     }
 
     public static ActiveTurn findExternalTurn(String maidUuid, String turnId) {
@@ -94,10 +94,6 @@ public final class MaidExternalTurnGuard {
 
     public static CompletedTurn releaseForIdentity(MaidTurnIdentity identity, String outcome, String reason) {
         return EXTERNAL_INJECTION_GUARD.releaseIdentity(identity, outcome, reason);
-    }
-
-    public static void markDelivered(MaidTurnIdentity identity, String sessionId) {
-        markDelivered(identity, sessionId, "");
     }
 
     public static void markDelivered(MaidTurnIdentity identity, String sessionId, String agentName) {
@@ -143,9 +139,8 @@ public final class MaidExternalTurnGuard {
         return new BeginResult(BeginStatus.ACCEPTED);
     }
 
-    private synchronized ActiveTurn complete(String maidUuid, String turnId) {
-        var completed = releaseExact(requiredMaidUuid(maidUuid), requiredTurnId(turnId), "reply", "");
-        return completed == null ? null : completed.turn();
+    private synchronized void complete(String maidUuid, String turnId) {
+        releaseExact(requiredMaidUuid(maidUuid), requiredTurnId(turnId), "reply", "");
     }
 
     private synchronized ActiveTurn find(String maidUuid, String turnId) {

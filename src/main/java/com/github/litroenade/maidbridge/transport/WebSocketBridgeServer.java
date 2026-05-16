@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -119,9 +120,10 @@ final class WebSocketBridgeServer {
         return List.copyOf(sessions.values());
     }
 
-    List<BridgeTransportSnapshot.Client> clientSnapshots(String activeAgentSessionId) {
+    List<BridgeTransportSnapshot.Client> clientSnapshots(Set<String> activeAgentSessionIds) {
+        var activeIds = activeAgentSessionIds == null ? Set.<String>of() : activeAgentSessionIds;
         return sessions().stream()
-                .map(session -> session.snapshot(session.id().equals(activeAgentSessionId)))
+                .map(session -> session.snapshot(activeIds.contains(session.id())))
                 .toList();
     }
 
@@ -261,6 +263,7 @@ final class WebSocketBridgeServer {
                     id,
                     currentSessionInitialize == null ? "" : currentSessionInitialize.clientName(),
                     currentSessionInitialize == null ? "" : currentSessionInitialize.agentId(),
+                    currentSessionInitialize == null ? "" : currentSessionInitialize.maidUuid(),
                     currentSessionInitialize == null ? List.of() : List.copyOf(currentSessionInitialize.roles()),
                     currentSessionInitialize == null ? List.of() : List.copyOf(currentSessionInitialize.subscriptions()),
                     activeAgent,

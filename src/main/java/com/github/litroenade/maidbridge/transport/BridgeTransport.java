@@ -83,10 +83,10 @@ public final class BridgeTransport {
 
     public void stop() {
         started = false;
-        var activeAgent = activeAgentTracker.activeSession(webSocketServer);
-        if (activeAgent != null) {
-            releaseDisconnectedTurns(activeAgent.id(), "bridge_transport_stopped");
-        }
+        activeAgentTracker.activeSessions(webSocketServer).values().stream()
+                .map(WebSocketBridgeServer.Session::id)
+                .distinct()
+                .forEach(sessionId -> releaseDisconnectedTurns(sessionId, "bridge_transport_stopped"));
         activeAgentTracker.clear();
         syncAgentStateToClients();
         server = null;
@@ -156,9 +156,9 @@ public final class BridgeTransport {
     public BridgeTransportSnapshot snapshot() {
         var currentServer = webSocketServer;
         var webSocketRunning = currentServer != null && currentServer.isStarted();
-        var activeAgent = activeAgentTracker.activeSession(currentServer);
-        var activeAgentSessionId = activeAgent == null ? "" : activeAgent.id();
-        var clients = currentServer == null ? List.<BridgeTransportSnapshot.Client>of() : currentServer.clientSnapshots(activeAgentSessionId);
+        var activeAgentSessionIds = activeAgentTracker.activeSessionIds();
+        var activeAgentSessionId = activeAgentSessionIds.stream().findFirst().orElse("");
+        var clients = currentServer == null ? List.<BridgeTransportSnapshot.Client>of() : currentServer.clientSnapshots(activeAgentSessionIds);
         return new BridgeTransportSnapshot(
                 started,
                 Config.bridgeServerEnabled,
@@ -242,7 +242,7 @@ public final class BridgeTransport {
     private void sendAgentTurnFrame(String frame, String requestId) {
         var currentServer = webSocketServer;
         var outboundFrame = outboundFrame(frame);
-        var activeAgent = currentServer == null ? null : activeAgentTracker.activeSession(currentServer);
+        var activeAgent = currentServer == null ? null : activeAgentTracker.activeSession(currentServer, outboundFrame.maidUuid());
         if (!BridgeRoutingRules.canReceive(activeAgent, outboundFrame)) {
             /*
              * 外部 agent 初始化前可能已有待处理轮次。
@@ -611,12 +611,12 @@ public final class BridgeTransport {
     }
 
     private boolean rejectUnlessActiveAgentSession(WebSocketBridgeServer.Session session, String rawFrame) {
-        if (activeAgentTracker.owns(session)) {
+        var turnIdentity = BridgeInboundParser.parseMaidTurnIdentityLenient(rawFrame, Config.maxBridgeMessageBytes);
+        if (activeAgentTracker.owns(session, turnIdentity.maidUuid())) {
             return false;
         }
         BridgeFrameIdentity identity = BridgeInboundParser.parseFrameIdentity(rawFrame, Config.maxBridgeMessageBytes);
-        var turnIdentity = BridgeInboundParser.parseMaidTurnIdentityLenient(rawFrame, Config.maxBridgeMessageBytes);
-        var activeAgent = activeAgentTracker.activeSession(webSocketServer);
+        var activeAgent = activeAgentTracker.activeSession(webSocketServer, turnIdentity.maidUuid());
         MaidBridge.LOGGER.warn(
                 "拒绝 maid.agent.turn.complete：不是当前活动 agent 会话 sessionId={} activeSessionId={} type={} maidUuid={} turnId={}",
                 session.id(),
@@ -711,10 +711,9 @@ public final class BridgeTransport {
     }
 
     private void syncAgentStateToClients() {
-        var activeAgent = activeAgentTracker.activeSession(webSocketServer);
-        var activeAgentId = agentDisplayName(activeAgent);
-        var agentIds = activeAgentId.isBlank() ? List.<String>of() : List.of(activeAgentId);
-        MaidExternalAgentDisplayState.replaceAgents(agentIds, activeAgentId);
+        Map<String, String> activeAgentsByMaidUuid = activeAgentTracker.activeSessions(webSocketServer).entrySet().stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, entry -> agentDisplayName(entry.getValue())));
+        MaidExternalAgentDisplayState.replaceAgents(activeAgentsByMaidUuid);
         var packet = SyncMaidBridgeAgentStatePacket.current();
         var currentServer = server;
         if (currentServer != null) {

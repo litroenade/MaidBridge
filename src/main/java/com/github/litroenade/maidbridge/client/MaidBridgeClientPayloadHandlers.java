@@ -68,7 +68,7 @@ public final class MaidBridgeClientPayloadHandlers {
     }
 
     public static void handleSyncMaidBridgeAgentState(SyncMaidBridgeAgentStatePacket packet) {
-        MaidAIChatClientAccessState.setBridgeAgentState(packet.chatMode(), packet.activeAgentId(), packet.agentIds());
+        MaidAIChatClientAccessState.setBridgeAgentState(packet.chatMode(), packet.activeAgentIds());
     }
 
     public static void handleSyncExternalEmoji(SyncExternalEmojiPacket packet) {

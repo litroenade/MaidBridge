@@ -10,9 +10,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class MaidAIChatClientAccessState {
     private static final Map<UUID, Boolean> CHAT_ONLY_BY_MAID = new ConcurrentHashMap<>();
+    private static final Map<UUID, String> ACTIVE_AGENT_BY_MAID = new ConcurrentHashMap<>();
     private static volatile String chatMode = Config.MAID_CHAT_MODE_NATIVE;
-    private static volatile String activeAgentId = "";
-    private static volatile List<String> agentIds = List.of();
 
     private MaidAIChatClientAccessState() {
     }
@@ -21,14 +20,18 @@ public final class MaidAIChatClientAccessState {
         CHAT_ONLY_BY_MAID.put(maidUuid, chatOnly);
     }
 
-    public static void setBridgeAgentState(String chatMode, String activeAgentId, List<String> agentIds) {
+    public static void setBridgeAgentState(String chatMode, Map<UUID, String> activeAgentIds) {
         MaidAIChatClientAccessState.chatMode = chatMode == null || chatMode.isBlank() ? Config.MAID_CHAT_MODE_NATIVE : chatMode.trim();
-        MaidAIChatClientAccessState.activeAgentId = activeAgentId == null ? "" : activeAgentId.trim();
-        MaidAIChatClientAccessState.agentIds = agentIds == null ? List.of() : agentIds.stream()
-                .map(agent -> agent == null ? "" : agent.trim())
-                .filter(agent -> !agent.isBlank())
-                .distinct()
-                .toList();
+        ACTIVE_AGENT_BY_MAID.clear();
+        if (activeAgentIds == null) {
+            return;
+        }
+        activeAgentIds.forEach((maidUuid, agentId) -> {
+            var normalizedAgentId = agentId == null ? "" : agentId.trim();
+            if (maidUuid != null && !normalizedAgentId.isBlank()) {
+                ACTIVE_AGENT_BY_MAID.put(maidUuid, normalizedAgentId);
+            }
+        });
     }
 
     public static boolean isChatOnly(UUID maidUuid) {
@@ -39,19 +42,23 @@ public final class MaidAIChatClientAccessState {
         return isChatOnly(maid.getUUID());
     }
 
-    public static boolean isExternalAgentMode() {
-        return Config.MAID_CHAT_MODE_EXTERNAL_AGENT.equals(chatMode);
+    public static boolean isExternalAgentMode(EntityMaid maid) {
+        return Config.MAID_CHAT_MODE_EXTERNAL_AGENT.equals(chatMode) && maid != null && ACTIVE_AGENT_BY_MAID.containsKey(maid.getUUID());
     }
 
-    public static String chatMode() {
+    public static String chatMode(EntityMaid maid) {
+        if (Config.MAID_CHAT_MODE_EXTERNAL_AGENT.equals(chatMode) && !isExternalAgentMode(maid)) {
+            return Config.MAID_CHAT_MODE_NATIVE;
+        }
         return chatMode;
     }
 
-    public static String activeAgentId() {
-        return activeAgentId;
+    public static String activeAgentId(EntityMaid maid) {
+        return maid == null ? "" : ACTIVE_AGENT_BY_MAID.getOrDefault(maid.getUUID(), "");
     }
 
-    public static List<String> agentIds() {
-        return List.copyOf(agentIds);
+    public static List<String> agentIds(EntityMaid maid) {
+        var activeAgentId = activeAgentId(maid);
+        return activeAgentId.isBlank() ? List.of() : List.of(activeAgentId);
     }
 }

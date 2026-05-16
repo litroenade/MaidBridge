@@ -73,9 +73,7 @@ public final class ExternalEmojiTextureCache {
         return true;
     }
 
-    @SuppressWarnings("resource")
-    private static NativeImage toNativeImage(BufferedImage image, int width, int height) {
-        NativeImage nativeImage = new NativeImage(width, height, true);
+    private static void copyNativeImagePixels(BufferedImage image, NativeImage nativeImage, int width, int height) {
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 int argb = image.getRGB(x, y);
@@ -86,7 +84,6 @@ public final class ExternalEmojiTextureCache {
                 nativeImage.setPixelRGBA(x, y, (a << 24) | (b << 16) | (g << 8) | r);
             }
         }
-        return nativeImage;
     }
 
     private static void closeFrames(NativeImage[] closedFrames) {
@@ -181,7 +178,16 @@ public final class ExternalEmojiTextureCache {
                 int[] decodedDelays = new int[totalFrames];
                 decodedFrames = new NativeImage[totalFrames];
                 for (int i = 0; i < totalFrames; i++) {
-                    decodedFrames[i] = toNativeImage(decoder.getFrame(i), frameSize.width, frameSize.height);
+                    NativeImage decodedFrame = new NativeImage(frameSize.width, frameSize.height, true);
+                    try {
+                        copyNativeImagePixels(decoder.getFrame(i), decodedFrame, frameSize.width, frameSize.height);
+                        decodedFrames[i] = decodedFrame;
+                        decodedFrame = null;
+                    } finally {
+                        if (decodedFrame != null) {
+                            decodedFrame.close();
+                        }
+                    }
                     decodedDelays[i] = Math.max(decoder.getDelay(i) / 50, 1);
                 }
                 TextureUtil.prepareImage(getId(), 0, frameSize.width, frameSize.height);

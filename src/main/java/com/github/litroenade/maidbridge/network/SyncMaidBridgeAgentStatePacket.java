@@ -11,16 +11,16 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * 服务端向客户端同步聊天窗口模式菜单需要的 MaidBridge 运行状态。
  */
 public record SyncMaidBridgeAgentStatePacket(
         String chatMode,
-        String activeAgentId,
-        List<String> agentIds
+        Map<UUID, String> activeAgentIds
 ) implements CustomPacketPayload {
     public static final CustomPacketPayload.Type<SyncMaidBridgeAgentStatePacket> TYPE = new CustomPacketPayload.Type<>(
             ResourceLocation.fromNamespaceAndPath(MaidBridge.MODID, "sync_maidbridge_agent_state")
@@ -30,42 +30,44 @@ public record SyncMaidBridgeAgentStatePacket(
         public @NotNull SyncMaidBridgeAgentStatePacket decode(@NotNull ByteBuf byteBuf) {
             var buf = new FriendlyByteBuf(byteBuf);
             var chatMode = buf.readUtf();
-            var activeAgentId = buf.readUtf();
             var size = buf.readVarInt();
-            var agentIds = new ArrayList<String>(size);
+            var activeAgentIds = new LinkedHashMap<UUID, String>();
             for (int i = 0; i < size; i++) {
-                agentIds.add(buf.readUtf());
+                activeAgentIds.put(buf.readUUID(), buf.readUtf());
             }
-            return new SyncMaidBridgeAgentStatePacket(chatMode, activeAgentId, agentIds);
+            return new SyncMaidBridgeAgentStatePacket(chatMode, activeAgentIds);
         }
 
         @Override
         public void encode(@NotNull ByteBuf byteBuf, @NotNull SyncMaidBridgeAgentStatePacket packet) {
             var buf = new FriendlyByteBuf(byteBuf);
             buf.writeUtf(packet.chatMode);
-            buf.writeUtf(packet.activeAgentId);
-            buf.writeVarInt(packet.agentIds.size());
-            for (var agentId : packet.agentIds) {
-                buf.writeUtf(agentId);
+            buf.writeVarInt(packet.activeAgentIds.size());
+            for (var entry : packet.activeAgentIds.entrySet()) {
+                buf.writeUUID(entry.getKey());
+                buf.writeUtf(entry.getValue());
             }
         }
     };
 
     public SyncMaidBridgeAgentStatePacket {
         chatMode = chatMode == null || chatMode.isBlank() ? Config.MAID_CHAT_MODE_NATIVE : chatMode.trim();
-        activeAgentId = activeAgentId == null ? "" : activeAgentId.trim();
-        agentIds = agentIds == null ? List.of() : agentIds.stream()
-                .map(agent -> agent == null ? "" : agent.trim())
-                .filter(agent -> !agent.isBlank())
-                .distinct()
-                .toList();
+        var normalized = new LinkedHashMap<UUID, String>();
+        if (activeAgentIds != null) {
+            activeAgentIds.forEach((maidUuid, agentId) -> {
+                var normalizedAgentId = agentId == null ? "" : agentId.trim();
+                if (maidUuid != null && !normalizedAgentId.isBlank()) {
+                    normalized.put(maidUuid, normalizedAgentId);
+                }
+            });
+        }
+        activeAgentIds = Map.copyOf(normalized);
     }
 
     public static SyncMaidBridgeAgentStatePacket current() {
         return new SyncMaidBridgeAgentStatePacket(
                 Config.maidAgentTurnMode,
-                MaidExternalAgentDisplayState.activeAgentId(),
-                MaidExternalAgentDisplayState.agentIds()
+                MaidExternalAgentDisplayState.activeAgentsByMaid()
         );
     }
 

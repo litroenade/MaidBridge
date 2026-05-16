@@ -174,10 +174,11 @@ public final class MaidBridgeDebugReports {
         var lines = new ArrayList<String>();
         lines.add("客户端 %d".formatted(clients.size()));
         for (BridgeTransportSnapshot.Client client : clients) {
-            lines.add("- 会话=%s 名称=%s agent=%s 角色=%s 订阅=%s 活动agent=%s 打开=%s".formatted(
+            lines.add("- 会话=%s 名称=%s agent=%s 女仆=%s 角色=%s 订阅=%s 活动agent=%s 打开=%s".formatted(
                     client.sessionId(),
                     display(client.clientName()),
                     display(client.agentId()),
+                    display(client.maidUuid()),
                     join(client.roles()),
                     join(client.subscriptions()),
                     client.activeAgent(),

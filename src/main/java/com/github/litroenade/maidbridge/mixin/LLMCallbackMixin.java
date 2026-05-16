@@ -1,9 +1,11 @@
 package com.github.litroenade.maidbridge.mixin;
 
 import com.github.litroenade.maidbridge.Config;
+import com.github.litroenade.maidbridge.maid.ai.chat.MaidExternalAgentDisplayState;
 import com.github.litroenade.maidbridge.trace.AiChainEventSink;
 import com.github.litroenade.maidbridge.trace.ReflectiveAccess;
 import com.github.litroenade.maidbridge.protocol.BridgeProtocol;
+import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.ai.manager.response.ResponseChat;
 import com.github.tartaricacid.touhoulittlemaid.ai.service.llm.LLMClient;
 import com.github.tartaricacid.touhoulittlemaid.ai.service.llm.openai.response.Message;
@@ -28,7 +30,7 @@ public abstract class LLMCallbackMixin {
     @Inject(method = "onSuccess(Lcom/github/tartaricacid/touhoulittlemaid/ai/manager/response/ResponseChat;)V", at = @At("HEAD"), cancellable = true)
     private void maidbridge$captureSuccess(ResponseChat responseChat, CallbackInfo ci) {
         Object maid = ReflectiveAccess.invoke(this, "getMaid");
-        if (Config.isExternalMaidAgentMode()) {
+        if (maidbridge$isExternalAgentMaid(maid)) {
             ci.cancel();
             return;
         }
@@ -68,7 +70,8 @@ public abstract class LLMCallbackMixin {
 
     @Inject(method = "onFunctionCall(Lcom/github/tartaricacid/touhoulittlemaid/ai/service/llm/openai/response/Message;Lcom/github/tartaricacid/touhoulittlemaid/ai/service/llm/LLMClient;)V", at = @At("HEAD"), cancellable = true)
     private void maidbridge$captureToolCalls(Message choice, LLMClient client, CallbackInfo ci) {
-        if (Config.isExternalMaidAgentMode()) {
+        Object maid = ReflectiveAccess.invoke(this, "getMaid");
+        if (maidbridge$isExternalAgentMaid(maid)) {
             ci.cancel();
             return;
         }
@@ -155,6 +158,13 @@ public abstract class LLMCallbackMixin {
     @Unique
     private static boolean maidbridge$shouldEmitMaidMessageOut(Object chatText) {
         return !String.valueOf(chatText).isBlank();
+    }
+
+    @Unique
+    private static boolean maidbridge$isExternalAgentMaid(Object maid) {
+        return Config.isExternalMaidAgentMode()
+                && maid instanceof EntityMaid entityMaid
+                && MaidExternalAgentDisplayState.hasAgent(entityMaid.getUUID());
     }
 
 }

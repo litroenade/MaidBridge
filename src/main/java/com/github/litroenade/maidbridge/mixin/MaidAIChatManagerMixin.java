@@ -1,8 +1,10 @@
 package com.github.litroenade.maidbridge.mixin;
 
 import com.github.litroenade.maidbridge.Config;
+import com.github.litroenade.maidbridge.maid.ai.chat.MaidExternalAgentDisplayState;
 import com.github.litroenade.maidbridge.trace.AiChainEventSink;
 import com.github.litroenade.maidbridge.trace.ReflectiveAccess;
+import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,7 +25,7 @@ public abstract class MaidAIChatManagerMixin {
     @Inject(method = "chat", at = @At("HEAD"))
     private void maidbridge$captureIncomingChat(String message, @Coerce Object clientInfo, @Coerce Object sender, CallbackInfo ci) {
         Object manager = maidbridge$self();
-        if (Config.isExternalMaidAgentMode()) {
+        if (maidbridge$isExternalAgentMaid(manager)) {
             return;
         }
         if (Config.enableAiChainCapture) {
@@ -48,7 +50,7 @@ public abstract class MaidAIChatManagerMixin {
             )
     )
     private void maidbridge$capturePromptBeforeSend(String message, List<?> messages, @Coerce Object chatClient, CallbackInfo ci) {
-        if (Config.isExternalMaidAgentMode() || !Config.enableAiChainCapture) {
+        if (maidbridge$isExternalAgentMaid(maidbridge$self()) || !Config.enableAiChainCapture) {
             return;
         }
         Object manager = maidbridge$self();
@@ -136,5 +138,13 @@ public abstract class MaidAIChatManagerMixin {
             }
         }
         return builder.toString();
+    }
+
+    @Unique
+    private static boolean maidbridge$isExternalAgentMaid(Object manager) {
+        Object maid = ReflectiveAccess.invoke(manager, "getMaid");
+        return Config.isExternalMaidAgentMode()
+                && maid instanceof EntityMaid entityMaid
+                && MaidExternalAgentDisplayState.hasAgent(entityMaid.getUUID());
     }
 }

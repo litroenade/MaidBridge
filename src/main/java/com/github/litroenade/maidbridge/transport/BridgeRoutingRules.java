@@ -13,23 +13,36 @@ final class BridgeRoutingRules {
     }
 
     static boolean canReceive(WebSocketBridgeServer.Session session, OutboundFrame frame) {
-        if (session == null || session.sessionInitialize() == null) {
+        if (session == null || frame == null) {
+            return false;
+        }
+        var sessionInitialize = session.sessionInitialize();
+        if (sessionInitialize == null) {
             return false;
         }
         var roleAllowed = frame.targetRoles().isEmpty() || frame.targetRoles().stream().anyMatch(session::hasRole);
         if (!roleAllowed) {
             return false;
         }
+        if (BridgeProtocol.TYPE_MAID_AGENT_TURN_REQUEST.equals(frame.type())
+                && !sameNonBlank(sessionInitialize.maidUuid(), frame.maidUuid())) {
+            return false;
+        }
         if (frame.subscriptions().isEmpty()) {
             return true;
         }
-        var subscriptions = session.sessionInitialize().subscriptions();
+        var subscriptions = sessionInitialize.subscriptions();
         return frame.subscriptions().stream().anyMatch(type -> subscriptions.stream().anyMatch(subscription -> subscriptionMatches(subscription, type)));
     }
 
     static boolean canReceiveAgentTurnRequests(BridgeSessionInitialize sessionInitialize) {
-        return sessionInitialize != null
-                && sessionInitialize.roles().contains("agent")
+        if (sessionInitialize == null) {
+            return false;
+        }
+        var maidUuid = sessionInitialize.maidUuid();
+        return sessionInitialize.roles().contains("agent")
+                && maidUuid != null
+                && !maidUuid.isBlank()
                 && sessionInitialize.subscriptions().stream().anyMatch(subscription -> subscriptionMatches(subscription, BridgeProtocol.TYPE_MAID_AGENT_TURN_REQUEST));
     }
 
@@ -79,5 +92,9 @@ final class BridgeRoutingRules {
             return type.startsWith(subscription.substring(0, subscription.length() - 1));
         }
         return false;
+    }
+
+    private static boolean sameNonBlank(String left, String right) {
+        return left != null && !left.isBlank() && left.equals(right);
     }
 }

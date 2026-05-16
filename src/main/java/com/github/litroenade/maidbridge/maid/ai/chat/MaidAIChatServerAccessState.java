@@ -31,4 +31,8 @@ public final class MaidAIChatServerAccessState {
     public static boolean isChatOnly(ServerPlayer player) {
         return CHAT_ONLY_MAID_BY_PLAYER.containsKey(player.getUUID());
     }
+
+    public static boolean isChatOnly(ServerPlayer player, UUID maidUuid) {
+        return maidUuid != null && maidUuid.equals(CHAT_ONLY_MAID_BY_PLAYER.get(player.getUUID()));
+    }
 }

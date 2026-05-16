@@ -176,7 +176,7 @@ public abstract class AIChatScreenMixin extends Screen {
             return;
         }
         boolean editable = !maidbridge$shouldLockControls();
-        boolean externalAgentMode = maidbridge$isExternalAgentMode();
+        boolean externalAgentMode = maidbridge$isExternalAgentMode();           
         this.maidbridge$modeButton.visible = editable;
         this.maidbridge$modeButton.active = editable;
         this.maidbridge$modeButton.setSelect(this.maidbridge$popupKind == maidbridge$POPUP_MODE);
@@ -202,7 +202,7 @@ public abstract class AIChatScreenMixin extends Screen {
 
     @Unique
     private String maidbridge$chatMode() {
-        return MaidAIChatClientAccessState.chatMode();
+        return MaidAIChatClientAccessState.chatMode(this.maid);
     }
 
     @Unique
@@ -280,8 +280,8 @@ public abstract class AIChatScreenMixin extends Screen {
         }
         var entries = new ArrayList<MaidBridgePopupMenu.Entry>();
         entries.add(MaidBridgePopupMenu.Entry.header(Component.translatable("gui.maidbridge.chat.popup.agent")));
-        String activeAgentId = MaidAIChatClientAccessState.activeAgentId();
-        for (String agentId : MaidAIChatClientAccessState.agentIds()) {
+        String activeAgentId = MaidAIChatClientAccessState.activeAgentId(this.maid);
+        for (String agentId : MaidAIChatClientAccessState.agentIds(this.maid)) {
             entries.add(MaidBridgePopupMenu.Entry.agent(Component.literal(agentId), agentId.equals(activeAgentId)));
         }
         entries.add(MaidBridgePopupMenu.Entry.refresh(Component.translatable("gui.maidbridge.chat.popup.refresh")));
@@ -341,13 +341,13 @@ public abstract class AIChatScreenMixin extends Screen {
     }
 
     @Unique
-    private static boolean maidbridge$isExternalAgentMode() {
-        return MaidAIChatClientAccessState.isExternalAgentMode();
+    private boolean maidbridge$isExternalAgentMode() {
+        return MaidAIChatClientAccessState.isExternalAgentMode(this.maid);
     }
 
     @Unique
-    private static String maidbridge$agentId() {
-        String agentId = MaidAIChatClientAccessState.activeAgentId();
+    private String maidbridge$agentId() {
+        String agentId = MaidAIChatClientAccessState.activeAgentId(this.maid);
         return agentId.isBlank() ? Component.translatable("gui.maidbridge.chat.summary.no_agent").getString() : agentId;
     }
 
