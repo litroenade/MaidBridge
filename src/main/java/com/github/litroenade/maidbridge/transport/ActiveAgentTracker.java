@@ -1,5 +1,7 @@
 package com.github.litroenade.maidbridge.transport;
 
+import com.github.litroenade.maidbridge.protocol.frame.BridgeSessionInitialize;
+
 final class ActiveAgentTracker {
     private final Object lock = new Object();
     private String activeSessionId = "";
@@ -10,7 +12,11 @@ final class ActiveAgentTracker {
         }
     }
 
-    boolean claim(WebSocketBridgeServer currentServer, WebSocketBridgeServer.Session session) {
+    ClaimResult claim(
+            WebSocketBridgeServer currentServer,
+            WebSocketBridgeServer.Session session,
+            BridgeSessionInitialize nextInitialize
+    ) {
         synchronized (lock) {
             var activeSession = currentServer == null ? null : currentServer.session(activeSessionId).orElse(null);
             if (activeSessionId.isBlank()
@@ -18,9 +24,13 @@ final class ActiveAgentTracker {
                     || !BridgeRoutingRules.canReceiveAgentTurnRequests(activeSession.sessionInitialize())
                     || activeSessionId.equals(session.id())) {
                 activeSessionId = session.id();
-                return true;
+                return ClaimResult.accepted(null);
             }
-            return false;
+            if (sameClient(activeSession.sessionInitialize(), nextInitialize)) {
+                activeSessionId = session.id();
+                return ClaimResult.accepted(activeSession);
+            }
+            return ClaimResult.rejected();
         }
     }
 
@@ -49,6 +59,30 @@ final class ActiveAgentTracker {
             }
             activeSessionId = "";
             return true;
+        }
+    }
+
+    private static boolean sameClient(BridgeSessionInitialize current, BridgeSessionInitialize next) {
+        if (current == null || next == null) {
+            return false;
+        }
+        if (sameNonBlank(current.id(), next.id())) {
+            return true;
+        }
+        return sameNonBlank(current.agentId(), next.agentId());
+    }
+
+    private static boolean sameNonBlank(String current, String next) {
+        return current != null && next != null && !current.isBlank() && current.equals(next);
+    }
+
+    record ClaimResult(boolean accepted, WebSocketBridgeServer.Session replacedSession) {
+        static ClaimResult accepted(WebSocketBridgeServer.Session replacedSession) {
+            return new ClaimResult(true, replacedSession);
+        }
+
+        static ClaimResult rejected() {
+            return new ClaimResult(false, null);
         }
     }
 }

@@ -89,7 +89,8 @@ public final class BridgeTransportLifecycle {
             int port,
             String path,
             String accessToken,
-            int maxMessageBytes
+            int maxMessageBytes,
+            int connectionLostTimeoutSeconds
     ) {
         private static BridgeServerSettings current() {
             return new BridgeServerSettings(
@@ -98,7 +99,8 @@ public final class BridgeTransportLifecycle {
                     Config.bridgeServerPort,
                     Config.bridgeServerPath,
                     Config.bridgeAccessToken,
-                    Config.maxBridgeMessageBytes
+                    Config.maxBridgeMessageBytes,
+                    Config.bridgeConnectionLostTimeoutSeconds
             );
         }
     }

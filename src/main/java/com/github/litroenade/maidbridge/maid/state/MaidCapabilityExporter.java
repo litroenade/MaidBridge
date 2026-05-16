@@ -78,10 +78,10 @@ public final class MaidCapabilityExporter {
                 )
         ), taskChoices));
         if (Config.enableExternalAgentEmoji) {
-            actions.add(action("show_emoji_bubble", "附加一个女仆表情包或颜文字气泡，可与回复文本同时显示。", Map.of(
+            actions.add(action("show_emoji_bubble", "附加 TLM 本地随机图片或颜文字气泡；不是 MaiBot 外部表情包发送。", Map.of(
                     "type", "object",
                     "properties", Map.of(
-                            "kind", Map.of("type", "string", "enum", List.of("image", "kaomoji"), "description", "image 为随机图片表情包，kaomoji 为按女仆当前状态选择颜文字。")
+                            "kind", Map.of("type", "string", "enum", List.of("image", "kaomoji"), "description", "image 为 TLM 本地随机图片，kaomoji 为按女仆当前状态选择颜文字。")
                     )
             )));
         }

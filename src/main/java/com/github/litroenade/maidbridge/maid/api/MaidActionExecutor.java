@@ -1,7 +1,14 @@
 package com.github.litroenade.maidbridge.maid.api;
 
 import com.github.litroenade.maidbridge.Config;
+import com.github.litroenade.maidbridge.MaidBridge;
+import com.github.litroenade.maidbridge.network.ExternalEmojiPayloadCache;
+import com.github.litroenade.maidbridge.network.MaidBridgeNetwork;
+import com.github.litroenade.maidbridge.network.SyncExternalEmojiPacket;
 import com.github.litroenade.maidbridge.trace.ReflectiveAccess;
+import com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.ChatBubbleDataCollection;
+import com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.IChatBubbleData;
+import com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.implement.ImageChatBubbleData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
@@ -12,7 +19,10 @@ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -29,6 +39,15 @@ public final class MaidActionExecutor {
     private static final String KAOMOJI_DATA = "com.github.tartaricacid.touhoulittlemaid.datapack.KaomojiData";
     private static final String MAID_SCHEDULE = "com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule";
     private static final String MAID_CONFIG = "com.github.tartaricacid.touhoulittlemaid.config.subconfig.MaidConfig";
+    private static final String EXTERNAL_EMOJI_IMAGE_FIELD = "image";
+    private static final int TLM_DEFAULT_EMOJI_DISPLAY_WIDTH = 24;
+    private static final int TLM_DEFAULT_EMOJI_DISPLAY_HEIGHT = 24;
+    private static final int EXTERNAL_EMOJI_EXIST_TICK = IChatBubbleData.DEFAULT_EXIST_TICK;
+
+    private enum ActionContext {
+        MAID_API,
+        EXTERNAL_AGENT_TURN
+    }
 
     private MaidActionExecutor() {
     }
@@ -37,24 +56,29 @@ public final class MaidActionExecutor {
         validateAll(actions);
         var results = new ArrayList<Map<String, Object>>();
         for (int index = 0; index < actions.size(); index++) {
-            results.add(apply(maid, actionMap(actions.get(index)), index));
+            results.add(apply(maid, actionMap(actions.get(index)), index, ActionContext.EXTERNAL_AGENT_TURN));
         }
         return List.copyOf(results);
     }
 
     public static Map<String, Object> apply(Entity maid, Map<String, Object> action) {
         validate(action);
-        return apply(maid, action, 0);
+        return apply(maid, action, 0, ActionContext.MAID_API);
     }
 
     public static void validateAll(List<Object> actions) {
         for (Object action : actions) {
-            validate(actionMap(action));
+            validate(actionMap(action), ActionContext.EXTERNAL_AGENT_TURN);
         }
     }
 
     public static void validate(Map<String, Object> action) {
+        validate(action, ActionContext.MAID_API);
+    }
+
+    private static void validate(Map<String, Object> action, ActionContext context) {
         var type = canonicalType(action);
+        ensureEmojiActionContext(type, context);
         switch (type) {
             case "switch_sit" -> requireBoolean(action, "sit", "value", "enabled");
             case "switch_follow_state" -> requireBoolean(action, "follow", "value", "enabled");
@@ -62,6 +86,10 @@ public final class MaidActionExecutor {
             case "switch_work_task" -> {
                 findTask(requireString(action, "task_id", "id", "value"));
                 optionalInt(action, "entity_id", "target_entity_id");
+            }
+            case "show_external_emoji" -> {
+                ensureExternalEmojiEnabled();
+                parseExternalEmojiImage(action);
             }
             case "show_emoji_bubble" -> {
                 ensureExternalEmojiEnabled();
@@ -71,8 +99,9 @@ public final class MaidActionExecutor {
         }
     }
 
-    private static Map<String, Object> apply(Entity maid, Map<String, Object> action, int index) {
+    private static Map<String, Object> apply(Entity maid, Map<String, Object> action, int index, ActionContext context) {
         var type = canonicalType(action);
+        ensureEmojiActionContext(type, context);
         var result = new LinkedHashMap<String, Object>();
         result.put("index", index);
         result.put("type", type);
@@ -81,6 +110,7 @@ public final class MaidActionExecutor {
             case "switch_follow_state" -> result.putAll(applyFollow(maid, requireBoolean(action, "follow", "value", "enabled")));
             case "switch_schedule" -> result.putAll(applySchedule(maid, requireString(action, "schedule", "value")));
             case "switch_work_task" -> result.putAll(applyTask(maid, action));
+            case "show_external_emoji" -> result.putAll(applyExternalEmojiBubble(maid, action));
             case "show_emoji_bubble" -> result.putAll(applyEmojiBubble(maid, action));
             default -> throw new IllegalArgumentException("不支持的女仆动作类型：" + type);
         }
@@ -210,6 +240,97 @@ public final class MaidActionExecutor {
         return result;
     }
 
+    private static Map<String, Object> applyExternalEmojiBubble(Entity maid, Map<String, Object> action) {
+        ensureExternalEmojiEnabled();
+        var image = parseExternalEmojiImage(action);
+        Object bubbleManager = invoke(maid, "getChatBubbleManager", new Class<?>[]{});
+        int previousBubbles = chatBubbleCount(bubbleManager);
+        var textureId = externalEmojiTextureId(image.hash());
+        var packet = new SyncExternalEmojiPacket(textureId, image.bytes(), image.width(), image.height());
+        ExternalEmojiPayloadCache.remember(packet);
+        MaidBridgeNetwork.sendToAllPlayers(packet);
+        long bubbleId = addExternalEmojiChatBubble(bubbleManager, externalEmojiBubble(textureId));
+        if (bubbleId < 0L) {
+            throw new IllegalArgumentException("外部表情气泡未写入 TLM 队列");
+        }
+        var result = new LinkedHashMap<String, Object>();
+        result.put("kind", "external_image");
+        result.put("format", image.format());
+        result.put("hash", image.hash());
+        result.put("source_hash", image.sourceHash());
+        result.put("source_format", image.sourceFormat());
+        result.put("width", image.width());
+        result.put("height", image.height());
+        result.put("display_width", TLM_DEFAULT_EMOJI_DISPLAY_WIDTH);
+        result.put("display_height", TLM_DEFAULT_EMOJI_DISPLAY_HEIGHT);
+        result.put("display_exist_tick", EXTERNAL_EMOJI_EXIST_TICK);
+        result.put("bytes", image.bytes().length);
+        result.put("texture_id", textureId.toString());
+        result.put("bubble_id", bubbleId);
+        result.put("previous_bubbles", previousBubbles);
+        result.put("current_bubbles", chatBubbleCount(bubbleManager));
+        MaidBridge.LOGGER.debug(
+                "外部表情气泡已加入 TLM 队列 textureId={} bubbleId={} previousBubbles={} currentBubbles={} displayTicks={}",
+                textureId,
+                bubbleId,
+                previousBubbles,
+                result.get("current_bubbles"),
+                EXTERNAL_EMOJI_EXIST_TICK
+        );
+        return result;
+    }
+
+    private static ImageChatBubbleData externalEmojiBubble(ResourceLocation textureId) {
+        return ImageChatBubbleData.create(
+                EXTERNAL_EMOJI_EXIST_TICK,
+                IChatBubbleData.TYPE_2,
+                textureId,
+                TLM_DEFAULT_EMOJI_DISPLAY_WIDTH,
+                TLM_DEFAULT_EMOJI_DISPLAY_HEIGHT,
+                0,
+                0,
+                TLM_DEFAULT_EMOJI_DISPLAY_WIDTH,
+                TLM_DEFAULT_EMOJI_DISPLAY_HEIGHT,
+                IChatBubbleData.DEFAULT_PRIORITY
+        );
+    }
+
+    private static long addExternalEmojiChatBubble(Object bubbleManager, IChatBubbleData bubble) {
+        Object rawCollection = invoke(bubbleManager, "getChatBubbleDataCollection", new Class<?>[]{});
+        if (!(rawCollection instanceof ChatBubbleDataCollection collection)) {
+            throw new IllegalArgumentException("女仆聊天气泡集合类型不匹配");
+        }
+        if (collection.size() >= ChatBubbleDataCollection.MAX_SIZE) {
+            long removableKey = removableChatBubbleKey(collection, bubble.priority());
+            if (removableKey < 0L) {
+                return -1L;
+            }
+            collection.remove(removableKey);
+        }
+        long key = uniqueChatBubbleKey(collection, bubble);
+        collection.put(key, bubble);
+        invoke(bubbleManager, "forceUpdateChatBubble", new Class<?>[]{});
+        return key;
+    }
+
+    private static long uniqueChatBubbleKey(ChatBubbleDataCollection collection, IChatBubbleData bubble) {
+        // TLM 以过期毫秒作为气泡 key；同一毫秒添加多个默认 TTL 气泡时，需要主动避让。
+        long key = System.currentTimeMillis() + bubble.existTick() * 50L;
+        while (collection.containsKey(key)) {
+            key++;
+        }
+        return key;
+    }
+
+    private static long removableChatBubbleKey(ChatBubbleDataCollection collection, int priority) {
+        for (long key : collection.keySet()) {
+            if (collection.get(key).priority() <= priority) {
+                return key;
+            }
+        }
+        return -1L;
+    }
+
     private static long addRandomImageEmoji(Object bubbleManager) {
         try {
             Object bubble = method(classForName(EMOJI_CHAT_BUBBLE_DATA), "create").invoke(null);
@@ -243,6 +364,42 @@ public final class MaidActionExecutor {
         }
     }
 
+    private static ExternalEmojiImage parseExternalEmojiImage(Map<String, Object> action) {
+        var image = externalEmojiImageMap(action);
+        var format = requiredStringValue(image, "format").toLowerCase(Locale.ROOT);
+        if (!"png".equals(format) && !"gif".equals(format)) {
+            throw new IllegalArgumentException("外部表情包格式只支持 png 或 gif");
+        }
+        var bytes = decodeImageBase64(requiredStringValue(image, "data_base64"));
+        var width = requiredPositiveInt(image, "width");
+        var height = requiredPositiveInt(image, "height");
+        var actualSize = "gif".equals(format) ? readGifSize(bytes) : readPngSize(bytes);
+        if (actualSize.width() != width || actualSize.height() != height) {
+            throw new IllegalArgumentException("外部表情包实际尺寸与声明尺寸不一致");
+        }
+        var computedHash = sha256Hex(bytes);
+        var declaredHash = optionalStringValue(image, "hash");
+        if (!declaredHash.isBlank() && !declaredHash.equalsIgnoreCase(computedHash)) {
+            throw new IllegalArgumentException("外部表情包 hash 与内容不匹配");
+        }
+        return new ExternalEmojiImage(
+                declaredHash.isBlank() ? computedHash : declaredHash.toLowerCase(Locale.ROOT),
+                bytes,
+                width,
+                height,
+                format,
+                optionalStringValue(image, "source_hash"),
+                optionalStringValue(image, "source_format")
+        );
+    }
+
+    private static ResourceLocation externalEmojiTextureId(String hash) {
+        if (hash.length() < 32) {
+            throw new IllegalArgumentException("外部表情包 hash 长度不足");
+        }
+        return ResourceLocation.fromNamespaceAndPath(MaidBridge.MODID, "external_emoji/" + hash.substring(0, 32));
+    }
+
     private static int chatBubbleCount(Object bubbleManager) {
         Object collection = invoke(bubbleManager, "getChatBubbleDataCollection", new Class<?>[]{});
         Object size = invoke(collection, "size", new Class<?>[]{});
@@ -273,9 +430,16 @@ public final class MaidActionExecutor {
             case "follow", "set_follow", "following" -> "switch_follow_state";
             case "schedule", "set_schedule" -> "switch_schedule";
             case "task", "work", "work_task", "set_task" -> "switch_work_task";
-            case "emoji", "emoji_bubble", "show_emoji", "show_emoji_bubble", "show_maid_emoji", "show_external_emoji" -> "show_emoji_bubble";
+            case "show_external_emoji", "external_emoji", "external_sticker" -> "show_external_emoji";
+            case "emoji", "emoji_bubble", "show_emoji", "show_emoji_bubble", "show_maid_emoji" -> "show_emoji_bubble";
             default -> raw;
         };
+    }
+
+    private static void ensureEmojiActionContext(String type, ActionContext context) {
+        if (("show_external_emoji".equals(type) || "show_emoji_bubble".equals(type)) && context != ActionContext.EXTERNAL_AGENT_TURN) {
+            throw new IllegalArgumentException("女仆表情气泡暂时只允许在外部 agent 接管回合内使用");
+        }
     }
 
     private static void ensureExternalEmojiEnabled() {
@@ -307,6 +471,129 @@ public final class MaidActionExecutor {
 
     private static String optionalString(Map<String, Object> action, String... keys) {
         return MaidApiReflection.stringValue(action, keys);
+    }
+
+    private static Map<String, Object> externalEmojiImageMap(Map<String, Object> action) {
+        Object value = action.get(EXTERNAL_EMOJI_IMAGE_FIELD);
+        if (!(value instanceof Map<?, ?> raw)) {
+            throw new IllegalArgumentException("外部表情包 image 字段必须是对象");
+        }
+        var map = new LinkedHashMap<String, Object>();
+        for (var entry : raw.entrySet()) {
+            map.put(String.valueOf(entry.getKey()), entry.getValue());
+        }
+        return map;
+    }
+
+    private static String requiredStringValue(Map<String, Object> map, String key) {
+        var value = optionalStringValue(map, key);
+        if (value.isBlank()) {
+            throw new IllegalArgumentException("外部表情包缺少必要字段：" + key);
+        }
+        return value;
+    }
+
+    private static String optionalStringValue(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private static int requiredPositiveInt(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        int number;
+        if (value instanceof Number rawNumber) {
+            number = rawNumber.intValue();
+        } else {
+            try {
+                number = Integer.parseInt(String.valueOf(value == null ? "" : value).trim());
+            } catch (NumberFormatException exception) {
+                throw new IllegalArgumentException("外部表情包尺寸字段必须是正整数：" + key, exception);
+            }
+        }
+        if (number <= 0) {
+            throw new IllegalArgumentException(key + " 必须是正整数");
+        }
+        return number;
+    }
+
+    private static byte[] decodeImageBase64(String rawBase64) {
+        var payload = rawBase64.startsWith("data:") && rawBase64.contains(",")
+                ? rawBase64.substring(rawBase64.indexOf(',') + 1)
+                : rawBase64;
+        try {
+            return Base64.getDecoder().decode(payload);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("外部表情包 data_base64 不是合法 Base64", exception);
+        }
+    }
+
+    private static ImageSize readPngSize(byte[] bytes) {
+        if (bytes.length < 33
+                || bytes[0] != (byte) 0x89
+                || bytes[1] != 0x50
+                || bytes[2] != 0x4E
+                || bytes[3] != 0x47
+                || bytes[4] != 0x0D
+                || bytes[5] != 0x0A
+                || bytes[6] != 0x1A
+                || bytes[7] != 0x0A
+                || bytes[12] != 0x49
+                || bytes[13] != 0x48
+                || bytes[14] != 0x44
+                || bytes[15] != 0x52) {
+            throw new IllegalArgumentException("外部表情包不是合法 PNG");
+        }
+        if (readPngInt(bytes, 8) != 13) {
+            throw new IllegalArgumentException("外部表情包 PNG 缺少合法 IHDR");
+        }
+        var width = readPngInt(bytes, 16);
+        var height = readPngInt(bytes, 20);
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("外部表情包 PNG 尺寸非法");
+        }
+        return new ImageSize(width, height);
+    }
+
+    private static int readPngInt(byte[] bytes, int offset) {
+        return ((bytes[offset] & 0xFF) << 24)
+                | ((bytes[offset + 1] & 0xFF) << 16)
+                | ((bytes[offset + 2] & 0xFF) << 8)
+                | (bytes[offset + 3] & 0xFF);
+    }
+
+    private static ImageSize readGifSize(byte[] bytes) {
+        if (bytes.length < 10
+                || bytes[0] != 0x47
+                || bytes[1] != 0x49
+                || bytes[2] != 0x46
+                || bytes[3] != 0x38
+                || (bytes[4] != 0x37 && bytes[4] != 0x39)
+                || bytes[5] != 0x61) {
+            throw new IllegalArgumentException("外部表情包不是合法 GIF");
+        }
+        var width = readGifUnsignedShort(bytes, 6);
+        var height = readGifUnsignedShort(bytes, 8);
+        if (width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("外部表情包 GIF 尺寸非法");
+        }
+        return new ImageSize(width, height);
+    }
+
+    private static int readGifUnsignedShort(byte[] bytes, int offset) {
+        return (bytes[offset] & 0xFF) | ((bytes[offset + 1] & 0xFF) << 8);
+    }
+
+    private static String sha256Hex(byte[] bytes) {
+        try {
+            var digest = MessageDigest.getInstance("SHA-256").digest(bytes);
+            var builder = new StringBuilder(digest.length * 2);
+            for (byte value : digest) {
+                builder.append("%02x".formatted(value & 0xFF));
+            }
+            return builder.toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("当前 Java 运行时不支持 SHA-256", exception);
+        }
     }
 
     private static boolean requireBoolean(Map<String, Object> action, String... keys) {
@@ -460,5 +747,19 @@ public final class MaidActionExecutor {
             return runtimeException;
         }
         return new IllegalArgumentException("调用失败：" + methodName, cause);
+    }
+
+    private record ExternalEmojiImage(
+            String hash,
+            byte[] bytes,
+            int width,
+            int height,
+            String format,
+            String sourceHash,
+            String sourceFormat
+    ) {
+    }
+
+    private record ImageSize(int width, int height) {
     }
 }

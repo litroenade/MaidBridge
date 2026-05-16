@@ -16,6 +16,8 @@ import static com.github.litroenade.maidbridge.protocol.BridgeJson.firstNonBlank
  * <p>协议层只负责稳定外壳；女仆、玩家和行动语义统一放在 payload 里。</p>
  */
 public final class BridgeFrameBuilder {
+    public static final List<String> SUPPORTED_EXTERNAL_AGENT_EMOJI_FORMATS = List.of("png", "gif");
+
     private BridgeFrameBuilder() {
     }
 
@@ -38,6 +40,7 @@ public final class BridgeFrameBuilder {
         payload.put("external_maid_agent_turns", Config.isExternalMaidAgentMode());
         payload.put("maid_agent_turn_mode", Config.maidAgentTurnMode);
         payload.put("external_agent_emoji", Config.enableExternalAgentEmoji);
+        payload.put("external_agent_emoji_formats", SUPPORTED_EXTERNAL_AGENT_EMOJI_FORMATS);
         putServerStatus(payload);
 
         var frame = baseFrame(BridgeProtocol.TYPE_SESSION_READY, payload);
@@ -143,7 +146,8 @@ public final class BridgeFrameBuilder {
                 "maid_api_exposure", Config.enableMaidApiExposure,
                 "external_maid_agent_turns", Config.isExternalMaidAgentMode(),
                 "maid_agent_turn_mode", Config.maidAgentTurnMode,
-                "external_agent_emoji", Config.enableExternalAgentEmoji
+                "external_agent_emoji", Config.enableExternalAgentEmoji,
+                "external_agent_emoji_formats", SUPPORTED_EXTERNAL_AGENT_EMOJI_FORMATS
         ));
         payload.put("capabilities", BridgeProtocol.serverCapabilities(
                 Config.enableAiChainCapture,
@@ -154,7 +158,9 @@ public final class BridgeFrameBuilder {
                 Config.enableMaidApiActions,
                 Config.isExternalMaidAgentMode(),
                 Config.isExternalMaidAgentMode(),
-                Config.bridgeServerEnabled
+                Config.bridgeServerEnabled,
+                Config.enableExternalAgentEmoji,
+                SUPPORTED_EXTERNAL_AGENT_EMOJI_FORMATS
         ));
     }
 

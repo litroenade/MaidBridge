@@ -6,6 +6,7 @@ import com.github.litroenade.maidbridge.maid.api.MaidApiReflection;
 import com.github.litroenade.maidbridge.maid.api.MaidEntityLookup;
 import com.github.litroenade.maidbridge.protocol.BridgeProtocol;
 import com.github.litroenade.maidbridge.protocol.frame.MaidAgentTurnComplete;
+import com.github.litroenade.maidbridge.protocol.frame.MaidTurnIdentity;
 import com.github.tartaricacid.touhoulittlemaid.config.subconfig.AIConfig;
 import com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.ChatBubbleManager;
 import com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.implement.TextChatBubbleData;
@@ -42,7 +43,7 @@ public final class MaidAgentTurnCompleteFacade {
     }
 
     public static Map<String, Object> applyReply(MinecraftServer server, MaidAgentTurnComplete result) {
-        var pendingTurn = MaidExternalTurnGuard.completeExternalTurn(result.maidUuid(), result.turnId());
+        var pendingTurn = MaidExternalTurnGuard.findExternalTurn(result.maidUuid(), result.turnId());
         if (pendingTurn == null) {
             throw new IllegalArgumentException("没有待处理的外部女仆轮次 turn_id=" + result.turnId());
         }
@@ -63,12 +64,57 @@ public final class MaidAgentTurnCompleteFacade {
 
             var ttsDispatch = dispatchTtsIfRequested(maid, result.chatText(), result.ttsText());
             var actionResults = MaidActionExecutor.applyAll(maid, result.actions());
-            var displayName = externalAgentDisplayName(maid, pendingTurn);
+            var displayName = externalAgentDisplayName(maid, result, pendingTurn);
             var ownerDelivered = ttsDispatch.dispatched() ? ownerOnline(maid) : deliverChatText(maid, result.chatText(), displayName);
             var historyAppended = appendHistoryIfRequested(maid, result.chatText(), historyPolicy);
+            var released = MaidExternalTurnGuard.releaseForIdentity(
+                    new MaidTurnIdentity(result.maidUuid(), result.turnId(), result.id()),
+                    BridgeProtocol.TYPE_MAID_AGENT_TURN_OUTCOME_REPLY,
+                    ""
+            );
+            if (released == null) {
+                throw new IllegalArgumentException("没有待处理的外部女仆轮次 turn_id=" + result.turnId());
+            }
 
-            emitMaidMessageOut(result, pendingTurn, maid, actionResults, ttsDispatch);
-            return responsePayload(result, pendingTurn, maid, ownerDelivered, historyAppended, actionResults, ttsDispatch, System::currentTimeMillis);
+            emitMaidMessageOut(result, released.turn(), maid, actionResults, ttsDispatch);
+            return responsePayload(result, released.turn(), maid, ownerDelivered, historyAppended, actionResults, ttsDispatch, System::currentTimeMillis);
+        } catch (RuntimeException exception) {
+            throw turnFailure(result, exception);
+        }
+    }
+
+    public static Map<String, Object> applyNoReply(MinecraftServer server, MaidAgentTurnComplete result) {
+        var pendingTurn = MaidExternalTurnGuard.findExternalTurn(result.maidUuid(), result.turnId());
+        if (pendingTurn == null) {
+            throw new IllegalArgumentException("没有待处理的外部女仆轮次 turn_id=" + result.turnId());
+        }
+        try {
+            var actionsError = actionsValidationError(result);
+            if (!actionsError.isBlank()) {
+                throw new IllegalArgumentException(actionsError);
+            }
+            List<Map<String, Object>> actionResults = List.of();
+            Entity maid = null;
+            if (!result.actions().isEmpty()) {
+                ensureMaidModLoaded();
+                maid = findMaid(server, result, pendingTurn);
+                if (maid == null) {
+                    throw new IllegalArgumentException("未找到女仆");
+                }
+                if (!maid.isAlive()) {
+                    throw new IllegalArgumentException("女仆不处于存活状态");
+                }
+                actionResults = MaidActionExecutor.applyAll(maid, result.actions());
+            }
+            var released = MaidExternalTurnGuard.releaseForIdentity(
+                    new MaidTurnIdentity(result.maidUuid(), result.turnId(), result.id()),
+                    BridgeProtocol.TYPE_MAID_AGENT_TURN_OUTCOME_NO_REPLY,
+                    result.reason()
+            );
+            if (released == null) {
+                throw new IllegalArgumentException("没有待处理的外部女仆轮次 turn_id=" + result.turnId());
+            }
+            return noReplyPayload(result, released.turn(), maid, actionResults);
         } catch (RuntimeException exception) {
             throw turnFailure(result, exception);
         }
@@ -112,7 +158,7 @@ public final class MaidAgentTurnCompleteFacade {
         var payload = new LinkedHashMap<String, Object>();
         payload.put("routed", BridgeProtocol.TYPE_MAID_AGENT_TURN_COMPLETE);
         putMaidTurnIdentity(payload, result, maid);
-        putAgentIdentity(payload, pendingTurn);
+        putAgentIdentity(payload, result, pendingTurn);
         payload.put("request_id", pendingTurn.requestId());
         payload.put("accepted_at_ms", clock.getAsLong());
         payload.put("chat_text_delivered", true);
@@ -128,7 +174,7 @@ public final class MaidAgentTurnCompleteFacade {
     private static void emitMaidMessageOut(MaidAgentTurnComplete result, MaidExternalTurnGuard.ActiveTurn completedTurn, Entity maid, List<Map<String, Object>> actionResults, TtsDispatch ttsDispatch) {
         var payload = new LinkedHashMap<String, Object>();
         putMaidTurnIdentity(payload, result, maid);
-        putAgentIdentity(payload, completedTurn);
+        putAgentIdentity(payload, result, completedTurn);
         payload.put("chat_text", result.chatText());
         payload.put("message_kind", "external_agent_final");
         payload.put("actions_applied", actionResults.size());
@@ -136,6 +182,30 @@ public final class MaidAgentTurnCompleteFacade {
         putClientMetadata(payload, completedTurn.clientMetadata());
         putTtsDispatch(payload, ttsDispatch);
         AiChainEventSink.emit(BridgeProtocol.TYPE_MAID_MESSAGE_OUT, payload);
+    }
+
+    private static Map<String, Object> noReplyPayload(
+            MaidAgentTurnComplete result,
+            MaidExternalTurnGuard.ActiveTurn pendingTurn,
+            Entity maid,
+            List<Map<String, Object>> actionResults
+    ) {
+        var payload = new LinkedHashMap<String, Object>();
+        payload.put("routed", BridgeProtocol.TYPE_MAID_AGENT_TURN_COMPLETE);
+        payload.put("outcome", BridgeProtocol.TYPE_MAID_AGENT_TURN_OUTCOME_NO_REPLY);
+        if (maid != null) {
+            putMaidTurnIdentity(payload, result, maid);
+        } else {
+            payload.put("maid", Map.of("uuid", pendingTurn.maidUuid()));
+            payload.put("turn_id", pendingTurn.turnId());
+        }
+        putAgentIdentity(payload, result, pendingTurn);
+        payload.put("request_id", pendingTurn.requestId());
+        payload.put("reason", result.reason());
+        payload.put("actions_applied", actionResults.size());
+        payload.put("actions", actionResults);
+        putClientMetadata(payload, pendingTurn.clientMetadata());
+        return payload;
     }
 
     private static void putMaidTurnIdentity(Map<String, Object> payload, MaidAgentTurnComplete result, Entity maid) {
@@ -146,13 +216,19 @@ public final class MaidAgentTurnCompleteFacade {
         payload.put("turn_id", result.turnId());
     }
 
-    private static void putAgentIdentity(Map<String, Object> payload, MaidExternalTurnGuard.ActiveTurn pendingTurn) {
-        var agentName = firstNonBlank(pendingTurn.deliveredAgentName());
-        if (agentName.isBlank()) {
+    private static void putAgentIdentity(Map<String, Object> payload, MaidAgentTurnComplete result, MaidExternalTurnGuard.ActiveTurn pendingTurn) {
+        var agentId = firstNonBlank(result.agentId());
+        var agentName = firstNonBlank(result.agentName(), pendingTurn.deliveredAgentName());
+        if (agentId.isBlank() && agentName.isBlank()) {
             return;
         }
         var agentPayload = new LinkedHashMap<String, Object>();
-        agentPayload.put("name", agentName);
+        if (!agentId.isBlank()) {
+            agentPayload.put("id", agentId);
+        }
+        if (!agentName.isBlank()) {
+            agentPayload.put("name", agentName);
+        }
         payload.put("agent", agentPayload);
     }
 
@@ -283,8 +359,8 @@ public final class MaidAgentTurnCompleteFacade {
         return invoke(maid, "getOwner") instanceof ServerPlayer;
     }
 
-    private static String externalAgentDisplayName(Entity maid, MaidExternalTurnGuard.ActiveTurn pendingTurn) {
-        return firstNonBlank(pendingTurn.deliveredAgentName(), MaidEntityLookup.entityName(maid));
+    private static String externalAgentDisplayName(Entity maid, MaidAgentTurnComplete result, MaidExternalTurnGuard.ActiveTurn pendingTurn) {
+        return firstNonBlank(result.agentName(), pendingTurn.deliveredAgentName(), result.agentId(), MaidEntityLookup.entityName(maid));
     }
 
     private static Object invoke(Object target, String methodName) {

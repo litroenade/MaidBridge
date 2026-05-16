@@ -59,6 +59,7 @@ public final class BridgeTransport {
                         Config.bridgeServerPath,
                         Config.bridgeAccessToken,
                         Config.maxBridgeMessageBytes,
+                        Config.bridgeConnectionLostTimeoutSeconds,
                         this::handleInboundFrame,
                         this::handleSessionClosed
                 );
@@ -310,12 +311,20 @@ public final class BridgeTransport {
         BridgeFrameIdentity identity = BridgeInboundParser.parseFrameIdentity(rawFrame, Config.maxBridgeMessageBytes);
         try {
             var sessionInitialize = BridgeInboundParser.parseSessionInitialize(rawFrame, Config.maxBridgeMessageBytes);
-            if (BridgeRoutingRules.canReceiveAgentTurnRequests(sessionInitialize) && !activeAgentTracker.claim(webSocketServer, session)) {
+            var claim = BridgeRoutingRules.canReceiveAgentTurnRequests(sessionInitialize)
+                    ? activeAgentTracker.claim(webSocketServer, session, sessionInitialize)
+                    : ActiveAgentTracker.ClaimResult.accepted(null);
+            if (!claim.accepted()) {
                 sendDomainFailure(session, BridgeProtocol.TYPE_SESSION_READY, sessionInitialize.id(), sessionInitialize.traceId(), "已有另一个活动 agent 客户端连接");
                 return;
             }
             session.setSessionInitialize(sessionInitialize);
             if (BridgeRoutingRules.canReceiveAgentTurnRequests(sessionInitialize)) {
+                var replacedSession = claim.replacedSession();
+                if (replacedSession != null) {
+                    releaseDisconnectedTurns(replacedSession.id(), "active_agent_replaced");
+                    replacedSession.close("活动接管客户端已被新连接替换");
+                }
                 syncAgentStateToClients();
             }
             var serverName = server == null ? "Minecraft 服务器" : server.getServerModName();
@@ -718,7 +727,7 @@ public final class BridgeTransport {
             return "";
         }
         var sessionInitialize = session.sessionInitialize();
-        return firstNonBlank(sessionInitialize.agentId(), sessionInitialize.clientName(), session.id());
+        return firstNonBlank(sessionInitialize.clientName(), sessionInitialize.agentId(), session.id());
     }
 
     private static String firstNonBlank(String... values) {

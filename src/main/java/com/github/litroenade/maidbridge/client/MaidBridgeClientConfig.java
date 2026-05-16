@@ -59,6 +59,20 @@ public final class MaidBridgeClientConfig {
                 .setTooltip(Component.translatable("config.maidbridge.enable_external_agent_emoji.tooltip"))
                 .setSaveConsumer(Config::setEnableExternalAgentEmoji)
                 .build());
+        sink.add(entries.startIntField(Component.translatable("config.maidbridge.external_emoji_cache_ttl_ms"), Config.externalEmojiCacheTtlMs)
+                .setDefaultValue(Config.DEFAULT_EXTERNAL_EMOJI_CACHE_TTL_MS)
+                .setMin(1000)
+                .setMax(1800000)
+                .setTooltip(Component.translatable("config.maidbridge.external_emoji_cache_ttl_ms.tooltip"))
+                .setSaveConsumer(Config::setExternalEmojiCacheTtlMs)
+                .build());
+        sink.add(entries.startIntField(Component.translatable("config.maidbridge.max_external_emoji_cache_entries"), Config.maxExternalEmojiCacheEntries)
+                .setDefaultValue(Config.DEFAULT_MAX_EXTERNAL_EMOJI_CACHE_ENTRIES)
+                .setMin(1)
+                .setMax(4096)
+                .setTooltip(Component.translatable("config.maidbridge.max_external_emoji_cache_entries.tooltip"))
+                .setSaveConsumer(Config::setMaxExternalEmojiCacheEntries)
+                .build());
     }
 
     private static void gatewayChatEntries(ConfigEntrySink sink, ConfigEntryBuilder entries) {
@@ -114,9 +128,9 @@ public final class MaidBridgeClientConfig {
 
     private static void debugProtocolEntries(ConfigEntrySink sink, ConfigEntryBuilder entries) {
         sink.add(entries.startIntField(Component.translatable("config.maidbridge.max_bridge_message_bytes"), Config.maxBridgeMessageBytes)
-                .setDefaultValue(32768)
+                .setDefaultValue(Config.DEFAULT_MAX_BRIDGE_MESSAGE_BYTES)
                 .setMin(1024)
-                .setMax(1048576)
+                .setMax(Config.MAX_BRIDGE_MESSAGE_BYTES_LIMIT)
                 .setSaveConsumer(Config::setMaxBridgeMessageBytes)
                 .build());
         sink.add(entries.startIntField(Component.translatable("config.maidbridge.max_outbound_frames"), Config.maxOutboundFrames)

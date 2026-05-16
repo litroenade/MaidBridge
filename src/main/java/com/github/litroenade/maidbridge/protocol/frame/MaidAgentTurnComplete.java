@@ -14,6 +14,8 @@ public record MaidAgentTurnComplete(
         String ttsText,
         String historyPolicy,
         List<Object> actions,
+        String agentId,
+        String agentName,
         String reason
 ) {
     public MaidAgentTurnComplete {
@@ -26,6 +28,8 @@ public record MaidAgentTurnComplete(
         ttsText = safeString(ttsText);
         historyPolicy = safeString(historyPolicy);
         actions = List.copyOf(actions == null ? List.of() : actions);
+        agentId = safeString(agentId);
+        agentName = safeString(agentName);
         reason = safeString(reason);
     }
 

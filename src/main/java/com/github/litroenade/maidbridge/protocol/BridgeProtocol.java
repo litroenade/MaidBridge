@@ -1,11 +1,13 @@
 package com.github.litroenade.maidbridge.protocol;
 
+import java.util.List;
 import java.util.Map;
 
 /**
  * MaidBridge 网络协议常量。
  * <p>
- * Java mod、WebSocket 客户端和 Python 适配器都依赖这些 type、direction 和前缀；统一维护可以减少协议字符串漂移。
+ * Java mod、WebSocket 客户端和 Python 适配器都依赖这些 type、direction 和前缀；
+ * 统一维护可以减少协议字符串漂移。
  */
 public final class BridgeProtocol {
     public static final String PROTOCOL = "maidbridge.maid";
@@ -79,7 +81,9 @@ public final class BridgeProtocol {
             boolean maidApiCall,
             boolean externalMaidAgentTurns,
             boolean nativeAiChatIntercept,
-            boolean bridgeServer
+            boolean bridgeServer,
+            boolean externalAgentEmoji,
+            List<String> externalAgentEmojiFormats
     ) {
         return Map.ofEntries(
                 Map.entry("ai_chain_capture", aiChainCapture),
@@ -93,7 +97,9 @@ public final class BridgeProtocol {
                 Map.entry("maid_agent_turn_complete", externalMaidAgentTurns),
                 Map.entry("domain_response", true),
                 Map.entry("native_ai_chat_intercept", nativeAiChatIntercept),
-                Map.entry("bridge_server", bridgeServer)
+                Map.entry("bridge_server", bridgeServer),
+                Map.entry("external_agent_emoji", externalAgentEmoji),
+                Map.entry("external_agent_emoji_formats", List.copyOf(externalAgentEmojiFormats))
         );
     }
 }

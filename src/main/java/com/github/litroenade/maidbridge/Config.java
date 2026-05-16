@@ -11,6 +11,9 @@ public final class Config {
     public static final String DEFAULT_SOURCE_ENDPOINT = "maidbridge-java";
     public static final String DEFAULT_TARGET_ENDPOINT = "external-agent";
     public static final int DEFAULT_BRIDGE_SERVER_PORT = 8765;
+    public static final int DEFAULT_MAX_BRIDGE_MESSAGE_BYTES = 32 * 1024 * 1024;
+    public static final int DEFAULT_BRIDGE_CONNECTION_LOST_TIMEOUT_SECONDS = 20;
+    public static final int MAX_BRIDGE_MESSAGE_BYTES_LIMIT = 64 * 1024 * 1024;
     public static final String DEFAULT_BRIDGE_SERVER_HOST = "127.0.0.1";
     public static final String DEFAULT_BRIDGE_SERVER_PATH = "/maidbridge";
     public static final String DEFAULT_BRIDGE_SERVER_URL = "ws://127.0.0.1:8765/maidbridge";
@@ -18,6 +21,8 @@ public final class Config {
     public static final String DEFAULT_GATEWAY_CHAT_ROOM_NAME = "Minecraft Server";
     public static final String DEFAULT_INBOUND_GATEWAY_MESSAGE_PREFIX = "[Bridge] ";
     public static final String DEFAULT_MAID_INJECTION_POLICY = "owner_online";
+    public static final int DEFAULT_EXTERNAL_EMOJI_CACHE_TTL_MS = 120000;
+    public static final int DEFAULT_MAX_EXTERNAL_EMOJI_CACHE_ENTRIES = 128;
     public static final String MAID_CHAT_MODE_NATIVE = "native";
     public static final String MAID_CHAT_MODE_EXTERNAL_AGENT = "external_agent";
     public static final String MAID_CHAT_MODE_TLM_BRIDGE = "tlm_bridge";
@@ -66,6 +71,14 @@ public final class Config {
     private static final ModConfigSpec.BooleanValue ENABLE_EXTERNAL_AGENT_EMOJI = BUILDER
             .comment("允许外部女仆 agent 在当前回合附加表情包或颜文字气泡。")
             .define("enableExternalAgentEmoji", false);
+
+    private static final ModConfigSpec.IntValue EXTERNAL_EMOJI_CACHE_TTL_MS = BUILDER
+            .comment("外部 agent 表情纹理补发缓存的保留时间；玩家进入追踪范围时会在该时间内补发纹理。")
+            .defineInRange("externalEmojiCacheTtlMs", DEFAULT_EXTERNAL_EMOJI_CACHE_TTL_MS, 1000, 1800000);
+
+    private static final ModConfigSpec.IntValue MAX_EXTERNAL_EMOJI_CACHE_ENTRIES = BUILDER
+            .comment("外部 agent 表情纹理补发缓存条目上限；超出后会淘汰最旧纹理。")
+            .defineInRange("maxExternalEmojiCacheEntries", DEFAULT_MAX_EXTERNAL_EMOJI_CACHE_ENTRIES, 1, 4096);
 
     private static final ModConfigSpec.BooleanValue CAPTURE_RAW_LLM_REQUEST_BODIES = BUILDER
             .comment("在 maid.ai.llm.request 诊断事件中包含完整原始 OpenAI 兼容请求体；默认关闭以避免泄漏提示词。")
@@ -133,7 +146,11 @@ public final class Config {
 
     private static final ModConfigSpec.IntValue MAX_BRIDGE_MESSAGE_BYTES = BUILDER
             .comment("单个序列化桥接帧允许的最大 UTF-8 字节数。")
-            .defineInRange("maxBridgeMessageBytes", 32768, 1024, 1048576);
+            .defineInRange("maxBridgeMessageBytes", DEFAULT_MAX_BRIDGE_MESSAGE_BYTES, 1024, MAX_BRIDGE_MESSAGE_BYTES_LIMIT);
+
+    private static final ModConfigSpec.IntValue BRIDGE_CONNECTION_LOST_TIMEOUT_SECONDS = BUILDER
+            .comment("WebSocket 心跳丢失后的断开秒数；0 表示关闭底层连接丢失检测。")
+            .defineInRange("bridgeConnectionLostTimeoutSeconds", DEFAULT_BRIDGE_CONNECTION_LOST_TIMEOUT_SECONDS, 0, 300);
 
     private static final ModConfigSpec.IntValue MAX_OUTBOUND_FRAMES = BUILDER
             .comment("WebSocket 发送端接入前允许排队的序列化桥接帧上限。")
@@ -160,6 +177,8 @@ public final class Config {
     public static boolean enableMaidApiExposure = true;
     public static boolean enableMaidApiActions = true;
     public static boolean enableExternalAgentEmoji;
+    public static int externalEmojiCacheTtlMs = DEFAULT_EXTERNAL_EMOJI_CACHE_TTL_MS;
+    public static int maxExternalEmojiCacheEntries = DEFAULT_MAX_EXTERNAL_EMOJI_CACHE_ENTRIES;
     public static boolean captureRawLlmRequestBodies;
     public static int maxRawLlmRequestCharacters = 4096;
     public static String gatewayChatRoomId = DEFAULT_GATEWAY_CHAT_ROOM_ID;
@@ -179,7 +198,8 @@ public final class Config {
     public static int bridgeServerPort = DEFAULT_BRIDGE_SERVER_PORT;
     public static String bridgeServerPath = DEFAULT_BRIDGE_SERVER_PATH;
     public static String bridgeAccessToken = "";
-    public static int maxBridgeMessageBytes = 32768;
+    public static int maxBridgeMessageBytes = DEFAULT_MAX_BRIDGE_MESSAGE_BYTES;
+    public static int bridgeConnectionLostTimeoutSeconds = DEFAULT_BRIDGE_CONNECTION_LOST_TIMEOUT_SECONDS;
     public static int maxOutboundFrames = 512;
     public static int maxBufferedEvents = 512;
     public static boolean logCapturedEvents;
@@ -229,6 +249,14 @@ public final class Config {
 
     public static void setEnableExternalAgentEmoji(boolean value) {
         setAndSave(ENABLE_EXTERNAL_AGENT_EMOJI, value);
+    }
+
+    public static void setExternalEmojiCacheTtlMs(int value) {
+        setAndSave(EXTERNAL_EMOJI_CACHE_TTL_MS, value);
+    }
+
+    public static void setMaxExternalEmojiCacheEntries(int value) {
+        setAndSave(MAX_EXTERNAL_EMOJI_CACHE_ENTRIES, value);
     }
 
     public static void setCaptureRawLlmRequestBodies(boolean value) {
@@ -327,6 +355,8 @@ public final class Config {
         enableMaidApiExposure = ENABLE_MAID_API_EXPOSURE.get();
         enableMaidApiActions = ENABLE_MAID_API_ACTIONS.get();
         enableExternalAgentEmoji = ENABLE_EXTERNAL_AGENT_EMOJI.get();
+        externalEmojiCacheTtlMs = EXTERNAL_EMOJI_CACHE_TTL_MS.get();
+        maxExternalEmojiCacheEntries = MAX_EXTERNAL_EMOJI_CACHE_ENTRIES.get();
         captureRawLlmRequestBodies = CAPTURE_RAW_LLM_REQUEST_BODIES.get();
         maxRawLlmRequestCharacters = MAX_RAW_LLM_REQUEST_CHARACTERS.get();
         gatewayChatRoomId = GATEWAY_CHAT_ROOM_ID.get();
@@ -351,6 +381,7 @@ public final class Config {
         bridgeServerPath = endpoint.path();
         bridgeAccessToken = BRIDGE_ACCESS_TOKEN.get();
         maxBridgeMessageBytes = MAX_BRIDGE_MESSAGE_BYTES.get();
+        bridgeConnectionLostTimeoutSeconds = BRIDGE_CONNECTION_LOST_TIMEOUT_SECONDS.get();
         maxOutboundFrames = MAX_OUTBOUND_FRAMES.get();
         maxBufferedEvents = MAX_BUFFERED_EVENTS.get();
         logCapturedEvents = LOG_CAPTURED_EVENTS.get();

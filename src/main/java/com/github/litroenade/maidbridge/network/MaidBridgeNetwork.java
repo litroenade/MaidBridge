@@ -32,6 +32,11 @@ public final class MaidBridgeNetwork {
                 SyncMaidBridgeAgentStatePacket.STREAM_CODEC,
                 SyncMaidBridgeAgentStatePacket::handle
         );
+        registrar.playToClient(
+                SyncExternalEmojiPacket.TYPE,
+                SyncExternalEmojiPacket.STREAM_CODEC,
+                SyncExternalEmojiPacket::handle
+        );
         registrar.playToServer(
                 SetExternalMaidAgentModePacket.TYPE,
                 SetExternalMaidAgentModePacket.STREAM_CODEC,

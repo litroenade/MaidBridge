@@ -2,8 +2,10 @@ package com.github.litroenade.maidbridge.client;
 
 import com.github.litroenade.maidbridge.maid.ai.chat.client.MaidAIChatAttributionClientCache;
 import com.github.litroenade.maidbridge.maid.ai.chat.client.MaidAIChatClientAccessState;
+import com.github.litroenade.maidbridge.MaidBridge;
 import com.github.litroenade.maidbridge.network.MaidBridgeClientPayloadDispatch;
 import com.github.litroenade.maidbridge.network.OpenReadonlyMaidAIChatPacket;
+import com.github.litroenade.maidbridge.network.SyncExternalEmojiPacket;
 import com.github.litroenade.maidbridge.network.SyncMaidBridgeAgentStatePacket;
 import com.github.litroenade.maidbridge.network.SyncMaidAIChatAttributionsPacket;
 import com.github.tartaricacid.touhoulittlemaid.client.gui.entity.maid.ai.AIChatScreen;
@@ -23,7 +25,8 @@ public final class MaidBridgeClientPayloadHandlers {
         MaidBridgeClientPayloadDispatch.register(
                 MaidBridgeClientPayloadHandlers::handleSyncMaidAIChatAttributions,
                 MaidBridgeClientPayloadHandlers::handleOpenReadonlyMaidAIChat,
-                MaidBridgeClientPayloadHandlers::handleSyncMaidBridgeAgentState
+                MaidBridgeClientPayloadHandlers::handleSyncMaidBridgeAgentState,
+                MaidBridgeClientPayloadHandlers::handleSyncExternalEmoji
         );
     }
 
@@ -66,5 +69,16 @@ public final class MaidBridgeClientPayloadHandlers {
 
     public static void handleSyncMaidBridgeAgentState(SyncMaidBridgeAgentStatePacket packet) {
         MaidAIChatClientAccessState.setBridgeAgentState(packet.chatMode(), packet.activeAgentId(), packet.agentIds());
+    }
+
+    public static void handleSyncExternalEmoji(SyncExternalEmojiPacket packet) {
+        MaidBridge.LOGGER.debug(
+                "收到外部表情包纹理同步 textureId={} size={}x{} bytes={}",
+                packet.textureId(),
+                packet.width(),
+                packet.height(),
+                packet.imageBytes().length
+        );
+        ExternalEmojiTextureCache.register(packet.textureId(), packet.imageBytes(), packet.width(), packet.height());
     }
 }

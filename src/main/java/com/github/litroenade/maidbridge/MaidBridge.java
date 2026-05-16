@@ -3,6 +3,7 @@ package com.github.litroenade.maidbridge;
 import com.github.litroenade.maidbridge.command.MaidBridgeCommands;
 import com.github.litroenade.maidbridge.item.MaidUuidProbeItem;
 import com.github.litroenade.maidbridge.maid.ai.chat.MaidAIChatEvents;
+import com.github.litroenade.maidbridge.network.ExternalEmojiSyncEvents;
 import com.github.litroenade.maidbridge.network.MaidBridgeNetwork;
 import com.github.litroenade.maidbridge.registry.MaidBridgeItems;
 import com.github.litroenade.maidbridge.trace.GatewayChatEvents;
@@ -58,6 +59,7 @@ public final class MaidBridge {
 
     private void registerGameEvents() {
         NeoForge.EVENT_BUS.addListener(MaidUuidProbeItem::onEntityInteract);
+        NeoForge.EVENT_BUS.addListener(ExternalEmojiSyncEvents::onTrackingPlayer);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(MaidAIChatEvents::onPlayerLoggedOut);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, GatewayChatEvents::onServerChat);

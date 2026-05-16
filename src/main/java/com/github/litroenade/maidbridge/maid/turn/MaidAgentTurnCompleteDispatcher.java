@@ -2,10 +2,8 @@ package com.github.litroenade.maidbridge.maid.turn;
 
 import com.github.litroenade.maidbridge.MaidBridge;
 import com.github.litroenade.maidbridge.maid.action.MaidOperationQueue;
-import com.github.litroenade.maidbridge.protocol.BridgeProtocol;
 import com.github.litroenade.maidbridge.protocol.ResponseCallbacks;
 import com.github.litroenade.maidbridge.protocol.frame.MaidAgentTurnComplete;
-import com.github.litroenade.maidbridge.protocol.frame.MaidTurnIdentity;
 import net.minecraft.server.MinecraftServer;
 
 import java.util.Map;
@@ -43,7 +41,7 @@ public final class MaidAgentTurnCompleteDispatcher {
             if (complete.isReply()) {
                 payload = MaidAgentTurnCompleteFacade.applyReply(server, complete);
             } else if (complete.isNoReply()) {
-                payload = releaseNoReply(complete);
+                payload = MaidAgentTurnCompleteFacade.applyNoReply(server, complete);
             } else {
                 throw new IllegalArgumentException("不支持的女仆 agent 轮次 outcome=" + complete.outcome());
             }
@@ -60,22 +58,4 @@ public final class MaidAgentTurnCompleteDispatcher {
         }
     }
 
-    private static Map<String, Object> releaseNoReply(MaidAgentTurnComplete complete) {
-        var released = MaidExternalTurnGuard.releaseForIdentity(
-                new MaidTurnIdentity(complete.maidUuid(), complete.turnId(), complete.id()),
-                BridgeProtocol.TYPE_MAID_AGENT_TURN_OUTCOME_NO_REPLY,
-                complete.reason()
-        );
-        if (released == null) {
-            throw new IllegalArgumentException("没有待处理的外部女仆轮次 turn_id=" + complete.turnId());
-        }
-        var turn = released.turn();
-        return Map.of(
-                "routed", BridgeProtocol.TYPE_MAID_AGENT_TURN_COMPLETE,
-                "outcome", BridgeProtocol.TYPE_MAID_AGENT_TURN_OUTCOME_NO_REPLY,
-                "turn_id", turn.turnId(),
-                "request_id", turn.requestId(),
-                "reason", complete.reason()
-        );
-    }
 }

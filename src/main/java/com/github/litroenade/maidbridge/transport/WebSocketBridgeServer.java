@@ -29,6 +29,7 @@ final class WebSocketBridgeServer {
     private final String path;
     private final String accessToken;
     private final int maxMessageBytes;
+    private final int connectionLostTimeoutSeconds;
     private final BiConsumer<Session, String> inboundConsumer;
     private final Consumer<Session> closeConsumer;
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
@@ -44,6 +45,7 @@ final class WebSocketBridgeServer {
             String path,
             String accessToken,
             int maxMessageBytes,
+            int connectionLostTimeoutSeconds,
             BiConsumer<Session, String> inboundConsumer,
             Consumer<Session> closeConsumer
     ) {
@@ -52,6 +54,7 @@ final class WebSocketBridgeServer {
         this.path = normalizePath(path);
         this.accessToken = accessToken == null ? "" : accessToken;
         this.maxMessageBytes = Math.max(1024, maxMessageBytes);
+        this.connectionLostTimeoutSeconds = Math.max(0, connectionLostTimeoutSeconds);
         this.inboundConsumer = inboundConsumer;
         this.closeConsumer = closeConsumer == null ? session -> {
         } : closeConsumer;
@@ -62,6 +65,7 @@ final class WebSocketBridgeServer {
             return;
         }
         server = new Server(new InetSocketAddress(host, port));
+        server.setConnectionLostTimeout(connectionLostTimeoutSeconds);
         try {
             server.start();
             if (!startupLatch.await(STARTUP_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
@@ -271,8 +275,12 @@ final class WebSocketBridgeServer {
         }
 
         private void close() {
+            close("server stopping");
+        }
+
+        void close(String reason) {
             if (connection != null) {
-                connection.close(CLOSE_NORMAL, "server stopping");
+                connection.close(CLOSE_NORMAL, reason);
             }
         }
     }

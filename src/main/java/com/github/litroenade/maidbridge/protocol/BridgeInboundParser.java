@@ -83,11 +83,12 @@ public final class BridgeInboundParser {
         }
         requireClientToJavaDirection(json, type);
         var payload = requiredObject(json, "payload");
+        var agent = optionalAgentObject(payload);
         return new BridgeSessionInitialize(
                 requiredString(json, "id"),
                 optionalString(json, "trace_id"),
-                firstNonBlank(optionalString(payload, "client_name"), optionalString(payload, "name"), optionalString(payload, "client_id"), optionalString(json, "source_endpoint")),
-                firstNonBlank(optionalString(payload, "agent_id"), optionalString(payload, "agentId"), optionalString(payload, "client_name"), optionalString(payload, "name")),
+                firstNonBlank(optionalString(agent, "name"), optionalString(payload, "client_name"), optionalString(payload, "name"), optionalString(payload, "client_id"), optionalString(json, "source_endpoint")),
+                firstNonBlank(optionalString(agent, "id"), optionalString(payload, "agent_id"), optionalString(payload, "agentId"), optionalString(payload, "client_id"), optionalString(payload, "client_name"), optionalString(payload, "name")),
                 optionalStringList(payload, "roles"),
                 optionalStringList(payload, "subscriptions")
         );
@@ -200,6 +201,7 @@ public final class BridgeInboundParser {
             return parseReplyComplete(json, payload, maidUuid, turnId, maxTextCharacters);
         }
         if (BridgeProtocol.TYPE_MAID_AGENT_TURN_OUTCOME_NO_REPLY.equals(outcome)) {
+            var agent = optionalAgentObject(payload);
             return new MaidAgentTurnComplete(
                     requiredString(json, "id"),
                     optionalString(json, "trace_id"),
@@ -209,7 +211,9 @@ public final class BridgeInboundParser {
                     "",
                     "",
                     optionalHistoryPolicy(payload),
-                    List.of(),
+                    optionalActionsList(payload),
+                    optionalString(agent, "id"),
+                    optionalString(agent, "name"),
                     optionalString(payload, "reason")
             );
         }
@@ -224,6 +228,7 @@ public final class BridgeInboundParser {
             int maxTextCharacters
     ) {
         var reply = requiredObject(payload, "reply");
+        var agent = optionalAgentObject(payload);
         var chatText = requiredReplyText(reply);
         if (chatText.length() > Math.max(1, maxTextCharacters)) {
             throw new IllegalArgumentException("reply.text 超过 maxInboundGatewayTextCharacters");
@@ -242,6 +247,8 @@ public final class BridgeInboundParser {
                 ttsText,
                 optionalHistoryPolicy(payload),
                 optionalActionsList(payload),
+                optionalString(agent, "id"),
+                optionalString(agent, "name"),
                 optionalString(payload, "reason")
         );
     }
@@ -271,6 +278,16 @@ public final class BridgeInboundParser {
             throw new IllegalArgumentException("payload 必须是对象");
         }
         return json.getAsJsonObject("payload");
+    }
+
+    private static JsonObject optionalAgentObject(JsonObject payload) {
+        if (!payload.has("agent") || payload.get("agent").isJsonNull()) {
+            return new JsonObject();
+        }
+        if (!payload.get("agent").isJsonObject()) {
+            throw new IllegalArgumentException("payload.agent 必须是对象");
+        }
+        return payload.getAsJsonObject("agent");
     }
 
     private static String optionalMaidUuid(JsonObject payload) {
