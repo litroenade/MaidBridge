@@ -6,7 +6,7 @@ import com.github.litroenade.maidbridge.maid.ai.chat.MaidAIChatEvents;
 import com.github.litroenade.maidbridge.network.ExternalEmojiSyncEvents;
 import com.github.litroenade.maidbridge.network.MaidBridgeNetwork;
 import com.github.litroenade.maidbridge.registry.MaidBridgeItems;
-import com.github.litroenade.maidbridge.trace.GatewayChatEvents;
+import com.github.litroenade.maidbridge.trace.ServerChatEvents;
 import com.github.litroenade.maidbridge.transport.BridgeTransport;
 import com.github.litroenade.maidbridge.transport.BridgeTransportLifecycle;
 import com.mojang.logging.LogUtils;
@@ -62,7 +62,7 @@ public final class MaidBridge {
         NeoForge.EVENT_BUS.addListener(ExternalEmojiSyncEvents::onTrackingPlayer);
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(MaidAIChatEvents::onPlayerLoggedOut);
-        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, GatewayChatEvents::onServerChat);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ServerChatEvents::onServerChat);
         NeoForge.EVENT_BUS.addListener(this::onServerTick);
     }
 

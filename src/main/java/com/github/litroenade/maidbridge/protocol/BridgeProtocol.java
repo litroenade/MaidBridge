@@ -15,8 +15,8 @@ public final class BridgeProtocol {
     public static final String TYPE_SESSION_INITIALIZE = "bridge.session.initialize";
     public static final String TYPE_SESSION_READY = "bridge.session.ready";
     public static final String TYPE_BRIDGE_ERROR = "bridge.error";
-    public static final String TYPE_GATEWAY_MESSAGE = "bridge.gateway.message";
-    public static final String TYPE_GATEWAY_RESPONSE = "bridge.gateway.response";
+    public static final String TYPE_SERVER_CHAT_MESSAGE = "maidbridge.server.chat.message";
+    public static final String TYPE_SERVER_CHAT_RESPONSE = "maidbridge.server.chat.response";
     public static final String TYPE_MAID_MESSAGE_IN = "maid.message.in";
     public static final String TYPE_MAID_MESSAGE_OUT = "maid.message.out";
     public static final String TYPE_MAID_MESSAGE_RESPONSE = "maid.message.response";
@@ -48,8 +48,8 @@ public final class BridgeProtocol {
     public static final String PREFIX_MAID_API_QUERY = "maid.api.query.";
     public static final String PREFIX_MAID_API_CALL = "maid.api.call.";
     public static final String PREFIX_MAID_API_REGISTRY = "maid.api.registry.";
-    public static final String PREFIX_BRIDGE_GATEWAY = "bridge.gateway.";
     public static final String PREFIX_MAIDBRIDGE_SERVER = "maidbridge.server.";
+    public static final String PREFIX_SERVER_CHAT = "maidbridge.server.chat.";
 
     public static final String ERROR_MISSING_MAID_UUID = "payload.maid.uuid 必须是非空字符串";
 
@@ -75,7 +75,7 @@ public final class BridgeProtocol {
     public static Map<String, Object> serverCapabilities(
             boolean aiChainCapture,
             boolean rawAiTrace,
-            boolean gatewayChat,
+            boolean serverChat,
             boolean maidMessageBridge,
             boolean maidApiExposure,
             boolean maidApiCall,
@@ -88,7 +88,7 @@ public final class BridgeProtocol {
         return Map.ofEntries(
                 Map.entry("ai_chain_capture", aiChainCapture),
                 Map.entry("raw_ai_trace", rawAiTrace),
-                Map.entry("gateway_chat", gatewayChat),
+                Map.entry("server_chat", serverChat),
                 Map.entry("maid_message_bridge", maidMessageBridge),
                 Map.entry("maid_api_exposure", maidApiExposure),
                 Map.entry("direct_llm_override", false),

@@ -18,7 +18,7 @@ public final class MaidBridgeClientConfig {
         Config.refreshFromSpec();
         ConfigCategory category = root.getOrCreateCategory(Component.translatable("config.maidbridge.title"));
         category.addEntry(subCategory(entries, Component.translatable("config.maidbridge.category.maid_chat"), sink -> maidChatEntries(sink, entries)));
-        category.addEntry(subCategory(entries, Component.translatable("config.maidbridge.category.gateway_chat"), sink -> gatewayChatEntries(sink, entries)));
+        category.addEntry(subCategory(entries, Component.translatable("config.maidbridge.category.server_chat"), sink -> serverChatEntries(sink, entries)));
         category.addEntry(subCategory(entries, Component.translatable("config.maidbridge.category.debug"), sink -> debugEntries(sink, entries)));
     }
 
@@ -75,26 +75,31 @@ public final class MaidBridgeClientConfig {
                 .build());
     }
 
-    private static void gatewayChatEntries(ConfigEntrySink sink, ConfigEntryBuilder entries) {
-        sink.add(entries.startBooleanToggle(Component.translatable("config.maidbridge.enable_gateway_chat_capture"), Config.enableGatewayChatCapture)
+    private static void serverChatEntries(ConfigEntrySink sink, ConfigEntryBuilder entries) {
+        sink.add(entries.startBooleanToggle(Component.translatable("config.maidbridge.enable_server_chat_bridge"), Config.enableServerChatBridge)
                 .setDefaultValue(false)
-                .setTooltip(Component.translatable("config.maidbridge.enable_gateway_chat_capture.tooltip"))
-                .setSaveConsumer(Config::setEnableGatewayChatCapture)
+                .setTooltip(Component.translatable("config.maidbridge.enable_server_chat_bridge.tooltip"))
+                .setSaveConsumer(Config::setEnableServerChatBridge)
                 .build());
-        sink.add(entries.startBooleanToggle(Component.translatable("config.maidbridge.enable_inbound_gateway_messages"), Config.enableInboundGatewayMessages)
+        sink.add(entries.startBooleanToggle(Component.translatable("config.maidbridge.enable_external_server_chat_messages"), Config.enableExternalServerChatMessages)
                 .setDefaultValue(false)
-                .setTooltip(Component.translatable("config.maidbridge.enable_inbound_gateway_messages.tooltip"))
-                .setSaveConsumer(Config::setEnableInboundGatewayMessages)
+                .setTooltip(Component.translatable("config.maidbridge.enable_external_server_chat_messages.tooltip"))
+                .setSaveConsumer(Config::setEnableExternalServerChatMessages)
                 .build());
-        sink.add(entries.startStrField(Component.translatable("config.maidbridge.gateway_chat_room_name"), Config.gatewayChatRoomName)
-                .setDefaultValue(Config.DEFAULT_GATEWAY_CHAT_ROOM_NAME)
-                .setTooltip(Component.translatable("config.maidbridge.gateway_chat_room_name.tooltip"))
-                .setSaveConsumer(Config::setGatewayChatRoomName)
+        sink.add(entries.startStrField(Component.translatable("config.maidbridge.server_chat_room_name"), Config.serverChatRoomName)
+                .setDefaultValue(Config.DEFAULT_SERVER_CHAT_ROOM_NAME)
+                .setTooltip(Component.translatable("config.maidbridge.server_chat_room_name.tooltip"))
+                .setSaveConsumer(Config::setServerChatRoomName)
                 .build());
-        sink.add(entries.startStrField(Component.translatable("config.maidbridge.inbound_gateway_message_prefix"), Config.inboundGatewayMessagePrefix)
-                .setDefaultValue(Config.DEFAULT_INBOUND_GATEWAY_MESSAGE_PREFIX)
-                .setTooltip(Component.translatable("config.maidbridge.inbound_gateway_message_prefix.tooltip"))
-                .setSaveConsumer(Config::setInboundGatewayMessagePrefix)
+        sink.add(entries.startStrField(Component.translatable("config.maidbridge.server_chat_system_broadcast_prefix"), Config.serverChatSystemBroadcastPrefix)
+                .setDefaultValue(Config.DEFAULT_SERVER_CHAT_SYSTEM_BROADCAST_PREFIX)
+                .setTooltip(Component.translatable("config.maidbridge.server_chat_system_broadcast_prefix.tooltip"))
+                .setSaveConsumer(Config::setServerChatSystemBroadcastPrefix)
+                .build());
+        sink.add(entries.startBooleanToggle(Component.translatable("config.maidbridge.enable_server_chat_maid_presentation"), Config.enableServerChatMaidPresentation)
+                .setDefaultValue(false)
+                .setTooltip(Component.translatable("config.maidbridge.enable_server_chat_maid_presentation.tooltip"))
+                .setSaveConsumer(Config::setEnableServerChatMaidPresentation)
                 .build());
     }
 
@@ -102,7 +107,7 @@ public final class MaidBridgeClientConfig {
         sink.add(subCategory(entries, Component.translatable("config.maidbridge.debug.ai_chain"), child -> debugAiChainEntries(child, entries)));
         sink.add(subCategory(entries, Component.translatable("config.maidbridge.debug.protocol"), child -> debugProtocolEntries(child, entries)));
         sink.add(subCategory(entries, Component.translatable("config.maidbridge.debug.external_maid"), child -> debugExternalMaidEntries(child, entries)));
-        sink.add(subCategory(entries, Component.translatable("config.maidbridge.debug.gateway_chat"), child -> debugGatewayChatEntries(child, entries)));
+        sink.add(subCategory(entries, Component.translatable("config.maidbridge.debug.server_chat"), child -> debugServerChatEntries(child, entries)));
     }
 
     private static void debugAiChainEntries(ConfigEntrySink sink, ConfigEntryBuilder entries) {
@@ -119,6 +124,12 @@ public final class MaidBridgeClientConfig {
                 .setMin(0)
                 .setMax(65536)
                 .setSaveConsumer(Config::setMaxRawLlmRequestCharacters)
+                .build());
+        sink.add(entries.startIntField(Component.translatable("config.maidbridge.max_inbound_bridge_text_characters"), Config.maxInboundBridgeTextCharacters)
+                .setDefaultValue(1024)
+                .setMin(1)
+                .setMax(8192)
+                .setSaveConsumer(Config::setMaxInboundBridgeTextCharacters)
                 .build());
         sink.add(entries.startBooleanToggle(Component.translatable("config.maidbridge.log_captured_events"), Config.logCapturedEvents)
                 .setDefaultValue(false)
@@ -188,27 +199,27 @@ public final class MaidBridgeClientConfig {
                 .build());
     }
 
-    private static void debugGatewayChatEntries(ConfigEntrySink sink, ConfigEntryBuilder entries) {
-        sink.add(entries.startIntField(Component.translatable("config.maidbridge.max_inbound_gateway_text_characters"), Config.maxInboundGatewayTextCharacters)
-                .setDefaultValue(1024)
+    private static void debugServerChatEntries(ConfigEntrySink sink, ConfigEntryBuilder entries) {
+        sink.add(entries.startIntField(Component.translatable("config.maidbridge.max_server_chat_text_characters"), Config.maxServerChatTextCharacters)
+                .setDefaultValue(Config.DEFAULT_MAX_SERVER_CHAT_TEXT_CHARACTERS)
                 .setMin(1)
-                .setMax(8192)
-                .setTooltip(Component.translatable("config.maidbridge.max_inbound_gateway_text_characters.tooltip"))
-                .setSaveConsumer(Config::setMaxInboundGatewayTextCharacters)
+                .setMax(Config.DEFAULT_MAX_SERVER_CHAT_TEXT_CHARACTERS)
+                .setTooltip(Component.translatable("config.maidbridge.max_server_chat_text_characters.tooltip"))
+                .setSaveConsumer(Config::setMaxServerChatTextCharacters)
                 .build());
-        sink.add(entries.startStrField(Component.translatable("config.maidbridge.gateway_chat_room_id"), Config.gatewayChatRoomId)
-                .setDefaultValue(Config.DEFAULT_GATEWAY_CHAT_ROOM_ID)
-                .setSaveConsumer(Config::setGatewayChatRoomId)
+        sink.add(entries.startStrField(Component.translatable("config.maidbridge.server_chat_room_id"), Config.serverChatRoomId)
+                .setDefaultValue(Config.DEFAULT_SERVER_CHAT_ROOM_ID)
+                .setSaveConsumer(Config::setServerChatRoomId)
                 .build());
-        sink.add(entries.startBooleanToggle(Component.translatable("config.maidbridge.gateway_chat_use_raw_text"), Config.gatewayChatUseRawText)
+        sink.add(entries.startBooleanToggle(Component.translatable("config.maidbridge.server_chat_use_raw_text"), Config.serverChatUseRawText)
                 .setDefaultValue(false)
-                .setSaveConsumer(Config::setGatewayChatUseRawText)
+                .setSaveConsumer(Config::setServerChatUseRawText)
                 .build());
-        sink.add(entries.startIntField(Component.translatable("config.maidbridge.max_pending_inbound_gateway_messages"), Config.maxPendingInboundGatewayMessages)
+        sink.add(entries.startIntField(Component.translatable("config.maidbridge.max_pending_server_chat_messages"), Config.maxPendingServerChatMessages)
                 .setDefaultValue(64)
                 .setMin(1)
                 .setMax(1024)
-                .setSaveConsumer(Config::setMaxPendingInboundGatewayMessages)
+                .setSaveConsumer(Config::setMaxPendingServerChatMessages)
                 .build());
     }
 }

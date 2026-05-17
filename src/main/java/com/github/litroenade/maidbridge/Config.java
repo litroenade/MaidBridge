@@ -17,9 +17,10 @@ public final class Config {
     public static final String DEFAULT_BRIDGE_SERVER_HOST = "127.0.0.1";
     public static final String DEFAULT_BRIDGE_SERVER_PATH = "/maidbridge";
     public static final String DEFAULT_BRIDGE_SERVER_URL = "ws://127.0.0.1:8765/maidbridge";
-    public static final String DEFAULT_GATEWAY_CHAT_ROOM_ID = "server:default";
-    public static final String DEFAULT_GATEWAY_CHAT_ROOM_NAME = "Minecraft Server";
-    public static final String DEFAULT_INBOUND_GATEWAY_MESSAGE_PREFIX = "[Bridge] ";
+    public static final String DEFAULT_SERVER_CHAT_ROOM_ID = "server:default";
+    public static final String DEFAULT_SERVER_CHAT_ROOM_NAME = "Minecraft Server";
+    public static final String DEFAULT_SERVER_CHAT_SYSTEM_BROADCAST_PREFIX = "[Bridge] ";
+    public static final int DEFAULT_MAX_SERVER_CHAT_TEXT_CHARACTERS = 256;
     public static final String DEFAULT_MAID_INJECTION_POLICY = "owner_online";
     public static final int DEFAULT_EXTERNAL_EMOJI_CACHE_TTL_MS = 120000;
     public static final int DEFAULT_MAX_EXTERNAL_EMOJI_CACHE_ENTRIES = 128;
@@ -32,13 +33,13 @@ public final class Config {
             .comment("捕获女仆本体 AIChat 链路事件，供 MaidBridge 诊断使用。")
             .define("enableAiChainCapture", false);
 
-    private static final ModConfigSpec.BooleanValue ENABLE_GATEWAY_CHAT_CAPTURE = BUILDER
-            .comment("把普通 Minecraft 服务器聊天捕获为 bridge.gateway.message 事件。")
-            .define("enableGatewayChatCapture", false);
+    private static final ModConfigSpec.BooleanValue ENABLE_SERVER_CHAT_BRIDGE = BUILDER
+            .comment("把 Minecraft 公共聊天作为服务器群聊房间发布给外部客户端。")
+            .define("enableServerChatBridge", false);
 
-    private static final ModConfigSpec.BooleanValue ENABLE_INBOUND_GATEWAY_MESSAGES = BUILDER
-            .comment("允许外部 bridge.gateway.message 帧发送给在线 Minecraft 玩家。")
-            .define("enableInboundGatewayMessages", false);
+    private static final ModConfigSpec.BooleanValue ENABLE_EXTERNAL_SERVER_CHAT_MESSAGES = BUILDER
+            .comment("允许 MaiBot 或其他外部客户端把文字发到 Minecraft 聊天栏。")
+            .define("enableExternalServerChatMessages", false);
 
     private static final ModConfigSpec.BooleanValue ENABLE_MAID_MESSAGE_BRIDGE = BUILDER
             .comment("启用女仆消息事件，以及外部 maid.message.in 注入。")
@@ -88,29 +89,37 @@ public final class Config {
             .comment("启用 captureRawLlmRequestBodies 后，最多保留的原始 LLM 请求体字符数。")
             .defineInRange("maxRawLlmRequestCharacters", 4096, 0, 65536);
 
-    private static final ModConfigSpec.ConfigValue<String> GATEWAY_CHAT_ROOM_ID = BUILDER
-            .comment("普通 Minecraft 服务器聊天被桥接时使用的房间 ID。")
-            .define("gatewayChatRoomId", DEFAULT_GATEWAY_CHAT_ROOM_ID);
+    private static final ModConfigSpec.IntValue MAX_INBOUND_BRIDGE_TEXT_CHARACTERS = BUILDER
+            .comment("外部客户端发回女仆消息和女仆回合文本时允许的最大字符数。")
+            .defineInRange("maxInboundBridgeTextCharacters", 1024, 1, 8192);
 
-    private static final ModConfigSpec.ConfigValue<String> GATEWAY_CHAT_ROOM_NAME = BUILDER
-            .comment("普通 Minecraft 服务器聊天被桥接时使用的房间名称。")
-            .define("gatewayChatRoomName", DEFAULT_GATEWAY_CHAT_ROOM_NAME);
+    private static final ModConfigSpec.ConfigValue<String> SERVER_CHAT_ROOM_ID = BUILDER
+            .comment("Minecraft 服务器群聊房间 ID。")
+            .define("serverChatRoomId", DEFAULT_SERVER_CHAT_ROOM_ID);
 
-    private static final ModConfigSpec.BooleanValue GATEWAY_CHAT_USE_RAW_TEXT = BUILDER
+    private static final ModConfigSpec.ConfigValue<String> SERVER_CHAT_ROOM_NAME = BUILDER
+            .comment("Minecraft 服务器群聊房间名称。")
+            .define("serverChatRoomName", DEFAULT_SERVER_CHAT_ROOM_NAME);
+
+    private static final ModConfigSpec.BooleanValue SERVER_CHAT_USE_RAW_TEXT = BUILDER
             .comment("使用 ServerChatEvent 原始文本作为 plain_text；关闭时使用渲染后的消息组件文本。")
-            .define("gatewayChatUseRawText", false);
+            .define("serverChatUseRawText", false);
 
-    private static final ModConfigSpec.ConfigValue<String> INBOUND_GATEWAY_MESSAGE_PREFIX = BUILDER
-            .comment("外部 bridge.gateway.message 文本发送给 Minecraft 玩家前追加的前缀。")
-            .define("inboundGatewayMessagePrefix", DEFAULT_INBOUND_GATEWAY_MESSAGE_PREFIX);
+    private static final ModConfigSpec.ConfigValue<String> SERVER_CHAT_SYSTEM_BROADCAST_PREFIX = BUILDER
+            .comment("外部系统播报发送给 Minecraft 玩家前追加的前缀；普通群聊成员发言不会使用它。")
+            .define("serverChatSystemBroadcastPrefix", DEFAULT_SERVER_CHAT_SYSTEM_BROADCAST_PREFIX);
 
-    private static final ModConfigSpec.IntValue MAX_INBOUND_GATEWAY_TEXT_CHARACTERS = BUILDER
-            .comment("单个外部 bridge.gateway.message 文本字段允许的最大字符数。")
-            .defineInRange("maxInboundGatewayTextCharacters", 1024, 1, 8192);
+    private static final ModConfigSpec.BooleanValue ENABLE_SERVER_CHAT_MAID_PRESENTATION = BUILDER
+            .comment("允许后续服务器群聊回复让已加载的女仆做动作；现在不影响聊天，也不会加载区块。")
+            .define("enableServerChatMaidPresentation", false);
 
-    private static final ModConfigSpec.IntValue MAX_PENDING_INBOUND_GATEWAY_MESSAGES = BUILDER
-            .comment("等待 Minecraft 服务端线程分发的外部 bridge.gateway.message 帧上限。")
-            .defineInRange("maxPendingInboundGatewayMessages", 64, 1, 1024);
+    private static final ModConfigSpec.IntValue MAX_SERVER_CHAT_TEXT_CHARACTERS = BUILDER
+            .comment("单个服务器群聊入站文本字段允许的最大字符数。")
+            .defineInRange("maxServerChatTextCharacters", DEFAULT_MAX_SERVER_CHAT_TEXT_CHARACTERS, 1, DEFAULT_MAX_SERVER_CHAT_TEXT_CHARACTERS);
+
+    private static final ModConfigSpec.IntValue MAX_PENDING_SERVER_CHAT_MESSAGES = BUILDER
+            .comment("等待 Minecraft 服务端线程分发的服务器群聊帧上限。")
+            .defineInRange("maxPendingServerChatMessages", 64, 1, 1024);
 
     private static final ModConfigSpec.IntValue MAX_PENDING_MAID_OPERATIONS_PER_KEY = BUILDER
             .comment("同一只女仆允许排队的写操作上限；超过后拒绝新的 maid.api 调用。")
@@ -167,8 +176,8 @@ public final class Config {
     public static final ModConfigSpec SPEC = BUILDER.build();
 
     public static boolean enableAiChainCapture;
-    public static boolean enableGatewayChatCapture;
-    public static boolean enableInboundGatewayMessages;
+    public static boolean enableServerChatBridge;
+    public static boolean enableExternalServerChatMessages;
     public static boolean enableMaidMessageBridge;
     public static boolean enableMultiplayerMaidChat;
     public static int maidExternalTurnTtlMs = 120000;
@@ -181,12 +190,14 @@ public final class Config {
     public static int maxExternalEmojiCacheEntries = DEFAULT_MAX_EXTERNAL_EMOJI_CACHE_ENTRIES;
     public static boolean captureRawLlmRequestBodies;
     public static int maxRawLlmRequestCharacters = 4096;
-    public static String gatewayChatRoomId = DEFAULT_GATEWAY_CHAT_ROOM_ID;
-    public static String gatewayChatRoomName = DEFAULT_GATEWAY_CHAT_ROOM_NAME;
-    public static boolean gatewayChatUseRawText;
-    public static String inboundGatewayMessagePrefix = DEFAULT_INBOUND_GATEWAY_MESSAGE_PREFIX;
-    public static int maxInboundGatewayTextCharacters = 1024;
-    public static int maxPendingInboundGatewayMessages = 64;
+    public static int maxInboundBridgeTextCharacters = 1024;
+    public static String serverChatRoomId = DEFAULT_SERVER_CHAT_ROOM_ID;
+    public static String serverChatRoomName = DEFAULT_SERVER_CHAT_ROOM_NAME;
+    public static boolean serverChatUseRawText;
+    public static String serverChatSystemBroadcastPrefix = DEFAULT_SERVER_CHAT_SYSTEM_BROADCAST_PREFIX;
+    public static boolean enableServerChatMaidPresentation;
+    public static int maxServerChatTextCharacters = DEFAULT_MAX_SERVER_CHAT_TEXT_CHARACTERS;
+    public static int maxPendingServerChatMessages = 64;
     public static int maxPendingMaidOperationsPerKey = 64;
     public static String sourceEndpoint = DEFAULT_SOURCE_ENDPOINT;
     public static String targetEndpoint = DEFAULT_TARGET_ENDPOINT;
@@ -211,16 +222,16 @@ public final class Config {
         return MAID_CHAT_MODE_EXTERNAL_AGENT.equals(maidAgentTurnMode) || enableExternalMaidAgentTurns;
     }
 
-    public static void setEnableGatewayChatCapture(boolean value) {
-        setAndSave(ENABLE_GATEWAY_CHAT_CAPTURE, value);
+    public static void setEnableServerChatBridge(boolean value) {
+        setAndSave(ENABLE_SERVER_CHAT_BRIDGE, value);
     }
 
     public static void setEnableAiChainCapture(boolean value) {
         setAndSave(ENABLE_AI_CHAIN_CAPTURE, value);
     }
 
-    public static void setEnableInboundGatewayMessages(boolean value) {
-        setAndSave(ENABLE_INBOUND_GATEWAY_MESSAGES, value);
+    public static void setEnableExternalServerChatMessages(boolean value) {
+        setAndSave(ENABLE_EXTERNAL_SERVER_CHAT_MESSAGES, value);
     }
 
     public static void setEnableMultiplayerMaidChat(boolean value) {
@@ -267,28 +278,36 @@ public final class Config {
         setAndSave(MAX_RAW_LLM_REQUEST_CHARACTERS, value);
     }
 
-    public static void setGatewayChatRoomId(String value) {
-        setAndSave(GATEWAY_CHAT_ROOM_ID, value);
+    public static void setMaxInboundBridgeTextCharacters(int value) {
+        setAndSave(MAX_INBOUND_BRIDGE_TEXT_CHARACTERS, value);
     }
 
-    public static void setGatewayChatRoomName(String value) {
-        setAndSave(GATEWAY_CHAT_ROOM_NAME, value);
+    public static void setServerChatRoomId(String value) {
+        setAndSave(SERVER_CHAT_ROOM_ID, value);
     }
 
-    public static void setGatewayChatUseRawText(boolean value) {
-        setAndSave(GATEWAY_CHAT_USE_RAW_TEXT, value);
+    public static void setServerChatRoomName(String value) {
+        setAndSave(SERVER_CHAT_ROOM_NAME, value);
     }
 
-    public static void setInboundGatewayMessagePrefix(String value) {
-        setAndSave(INBOUND_GATEWAY_MESSAGE_PREFIX, value);
+    public static void setServerChatUseRawText(boolean value) {
+        setAndSave(SERVER_CHAT_USE_RAW_TEXT, value);
     }
 
-    public static void setMaxInboundGatewayTextCharacters(int value) {
-        setAndSave(MAX_INBOUND_GATEWAY_TEXT_CHARACTERS, value);
+    public static void setServerChatSystemBroadcastPrefix(String value) {
+        setAndSave(SERVER_CHAT_SYSTEM_BROADCAST_PREFIX, value);
     }
 
-    public static void setMaxPendingInboundGatewayMessages(int value) {
-        setAndSave(MAX_PENDING_INBOUND_GATEWAY_MESSAGES, value);
+    public static void setEnableServerChatMaidPresentation(boolean value) {
+        setAndSave(ENABLE_SERVER_CHAT_MAID_PRESENTATION, value);
+    }
+
+    public static void setMaxServerChatTextCharacters(int value) {
+        setAndSave(MAX_SERVER_CHAT_TEXT_CHARACTERS, value);
+    }
+
+    public static void setMaxPendingServerChatMessages(int value) {
+        setAndSave(MAX_PENDING_SERVER_CHAT_MESSAGES, value);
     }
 
     public static void setMaxPendingMaidOperationsPerKey(int value) {
@@ -345,8 +364,8 @@ public final class Config {
 
     public static void refreshFromSpec() {
         enableAiChainCapture = ENABLE_AI_CHAIN_CAPTURE.get();
-        enableGatewayChatCapture = ENABLE_GATEWAY_CHAT_CAPTURE.get();
-        enableInboundGatewayMessages = ENABLE_INBOUND_GATEWAY_MESSAGES.get();
+        enableServerChatBridge = ENABLE_SERVER_CHAT_BRIDGE.get();
+        enableExternalServerChatMessages = ENABLE_EXTERNAL_SERVER_CHAT_MESSAGES.get();
         enableMaidMessageBridge = ENABLE_MAID_MESSAGE_BRIDGE.get();
         enableMultiplayerMaidChat = ENABLE_MULTIPLAYER_MAID_CHAT.get();
         maidExternalTurnTtlMs = MAID_EXTERNAL_TURN_TTL_MS.get();
@@ -359,12 +378,14 @@ public final class Config {
         maxExternalEmojiCacheEntries = MAX_EXTERNAL_EMOJI_CACHE_ENTRIES.get();
         captureRawLlmRequestBodies = CAPTURE_RAW_LLM_REQUEST_BODIES.get();
         maxRawLlmRequestCharacters = MAX_RAW_LLM_REQUEST_CHARACTERS.get();
-        gatewayChatRoomId = GATEWAY_CHAT_ROOM_ID.get();
-        gatewayChatRoomName = GATEWAY_CHAT_ROOM_NAME.get();
-        gatewayChatUseRawText = GATEWAY_CHAT_USE_RAW_TEXT.get();
-        inboundGatewayMessagePrefix = normalizeGatewayPrefix(INBOUND_GATEWAY_MESSAGE_PREFIX.get());
-        maxInboundGatewayTextCharacters = MAX_INBOUND_GATEWAY_TEXT_CHARACTERS.get();
-        maxPendingInboundGatewayMessages = MAX_PENDING_INBOUND_GATEWAY_MESSAGES.get();
+        maxInboundBridgeTextCharacters = MAX_INBOUND_BRIDGE_TEXT_CHARACTERS.get();
+        serverChatRoomId = SERVER_CHAT_ROOM_ID.get();
+        serverChatRoomName = SERVER_CHAT_ROOM_NAME.get();
+        serverChatUseRawText = SERVER_CHAT_USE_RAW_TEXT.get();
+        serverChatSystemBroadcastPrefix = normalizeServerChatSystemBroadcastPrefix(SERVER_CHAT_SYSTEM_BROADCAST_PREFIX.get());
+        enableServerChatMaidPresentation = ENABLE_SERVER_CHAT_MAID_PRESENTATION.get();
+        maxServerChatTextCharacters = MAX_SERVER_CHAT_TEXT_CHARACTERS.get();
+        maxPendingServerChatMessages = MAX_PENDING_SERVER_CHAT_MESSAGES.get();
         maxPendingMaidOperationsPerKey = MAX_PENDING_MAID_OPERATIONS_PER_KEY.get();
         sourceEndpoint = SOURCE_ENDPOINT.get();
         targetEndpoint = normalizeTargetEndpoint(TARGET_ENDPOINT.get());
@@ -393,9 +414,9 @@ public final class Config {
         refreshFromSpec();
     }
 
-    private static String normalizeGatewayPrefix(String value) {
+    private static String normalizeServerChatSystemBroadcastPrefix(String value) {
         if (value == null || value.isBlank()) {
-            return DEFAULT_INBOUND_GATEWAY_MESSAGE_PREFIX;
+            return DEFAULT_SERVER_CHAT_SYSTEM_BROADCAST_PREFIX;
         }
         return value;
     }

@@ -96,8 +96,8 @@ public final class AiChainEventSink {
         if (type.startsWith(BridgeProtocol.PREFIX_MAID_API_REGISTRY)) {
             return !Config.enableMaidApiExposure;
         }
-        if (type.startsWith(BridgeProtocol.PREFIX_BRIDGE_GATEWAY)) {
-            return !Config.enableGatewayChatCapture;
+        if (type.startsWith(BridgeProtocol.PREFIX_SERVER_CHAT)) {
+            return !Config.enableServerChatBridge;
         }
         return false;
     }

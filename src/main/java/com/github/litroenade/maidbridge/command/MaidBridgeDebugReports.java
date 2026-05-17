@@ -82,11 +82,11 @@ public final class MaidBridgeDebugReports {
                 snapshot.path(),
                 activeAgentDisplay(snapshot)
         ));
-        lines.add("计数 队列=%d 丢弃=%d 网关=%d 重复网关=%d 格式错误=%d 发送失败=%d drop=%d disconnect=%d deadline=%d".formatted(
+        lines.add("计数 队列=%d 丢弃=%d 服务器群聊=%d 重复群聊=%d 格式错误=%d 发送失败=%d drop=%d disconnect=%d deadline=%d".formatted(
                 counters.queuedFrames(),
                 counters.droppedFrames(),
-                counters.inboundGatewayMessageFrames(),
-                counters.duplicateInboundGatewayFrames(),
+                counters.inboundServerChatMessageFrames(),
+                counters.duplicateInboundServerChatFrames(),
                 counters.malformedInboundFrames(),
                 counters.outboundSendFailures(),
                 counters.maidTurnDrops(),
@@ -262,7 +262,7 @@ public final class MaidBridgeDebugReports {
         String type = event.type();
         return "maid.ai.request.received".equals(type)
                 || BridgeProtocol.TYPE_MAID_MESSAGE_IN.equals(type)
-                || BridgeProtocol.TYPE_GATEWAY_MESSAGE.equals(type);
+                || BridgeProtocol.TYPE_SERVER_CHAT_MESSAGE.equals(type);
     }
 
     private static boolean isLlmCallbackEvent(AiChainEvent event) {

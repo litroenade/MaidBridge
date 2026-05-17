@@ -60,7 +60,7 @@ final class BridgeRoutingRules {
         if (type.startsWith(BridgeProtocol.PREFIX_MAID_AGENT)) {
             return List.of("agent");
         }
-        if (type.startsWith(BridgeProtocol.PREFIX_MAID_MESSAGE) || type.startsWith(BridgeProtocol.PREFIX_BRIDGE_GATEWAY)) {
+        if (type.startsWith(BridgeProtocol.PREFIX_SERVER_CHAT) || type.startsWith(BridgeProtocol.PREFIX_MAID_MESSAGE)) {
             return List.of("message");
         }
         if (type.startsWith(BridgeProtocol.PREFIX_MAID_API_QUERY)) {

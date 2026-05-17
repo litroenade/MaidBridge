@@ -31,10 +31,11 @@ public final class BridgeFrameBuilder {
                 BridgeProtocol.PREFIX_MAID_AGENT + "*",
                 BridgeProtocol.PREFIX_MAID_API + "*",
                 BridgeProtocol.PREFIX_MAID_AI + "*",
+                BridgeProtocol.PREFIX_SERVER_CHAT + "*",
                 BridgeProtocol.PREFIX_MAIDBRIDGE_SERVER + "*"
         ));
         payload.put("ai_chain_capture", Config.enableAiChainCapture);
-        payload.put("gateway_chat_capture", Config.enableGatewayChatCapture);
+        payload.put("server_chat", Config.enableServerChatBridge);
         payload.put("maid_message_bridge", Config.enableMaidMessageBridge);
         payload.put("maid_api_exposure", Config.enableMaidApiExposure);
         payload.put("external_maid_agent_turns", Config.isExternalMaidAgentMode());
@@ -141,7 +142,9 @@ public final class BridgeFrameBuilder {
     private static void putServerStatus(Map<String, Object> payload) {
         payload.put("features", Map.of(
                 "ai_chain_capture", Config.enableAiChainCapture,
-                "gateway_chat_capture", Config.enableGatewayChatCapture,
+                "server_chat", Config.enableServerChatBridge,
+                "external_server_chat_messages", Config.enableExternalServerChatMessages,
+                "server_chat_maid_presentation", Config.enableServerChatMaidPresentation,
                 "maid_message_bridge", Config.enableMaidMessageBridge,
                 "maid_api_exposure", Config.enableMaidApiExposure,
                 "external_maid_agent_turns", Config.isExternalMaidAgentMode(),
@@ -152,7 +155,7 @@ public final class BridgeFrameBuilder {
         payload.put("capabilities", BridgeProtocol.serverCapabilities(
                 Config.enableAiChainCapture,
                 Config.captureRawLlmRequestBodies,
-                Config.enableGatewayChatCapture,
+                Config.enableServerChatBridge,
                 Config.enableMaidMessageBridge,
                 Config.enableMaidApiExposure,
                 Config.enableMaidApiActions,

@@ -33,8 +33,8 @@ public record BridgeTransportSnapshot(
     public record Counters(
             int queuedFrames,
             long droppedFrames,
-            long inboundGatewayMessageFrames,
-            long duplicateInboundGatewayFrames,
+            long inboundServerChatMessageFrames,
+            long duplicateInboundServerChatFrames,
             long malformedInboundFrames,
             long outboundSendFailures,
             long maidTurnDrops,

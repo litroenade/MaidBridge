@@ -2,12 +2,12 @@ package com.github.litroenade.maidbridge.transport;
 
 import java.util.LinkedHashMap;
 
-final class InboundGatewayTracker {
+final class InboundServerChatTracker {
     private final LinkedHashMap<String, DeliveryState> deliveries = new LinkedHashMap<>();
     private final int maxRememberedIds;
     private int pendingCount;
 
-    InboundGatewayTracker(int maxRememberedIds) {
+    InboundServerChatTracker(int maxRememberedIds) {
         this.maxRememberedIds = Math.max(1, maxRememberedIds);
     }
 

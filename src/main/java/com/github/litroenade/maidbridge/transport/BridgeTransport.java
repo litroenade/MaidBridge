@@ -13,8 +13,8 @@ import com.github.litroenade.maidbridge.protocol.BridgeFrameBuilder;
 import com.github.litroenade.maidbridge.protocol.BridgeInboundParser;
 import com.github.litroenade.maidbridge.protocol.BridgeProtocol;
 import com.github.litroenade.maidbridge.protocol.frame.BridgeFrameIdentity;
-import com.github.litroenade.maidbridge.protocol.frame.BridgeGatewayMessage;
 import com.github.litroenade.maidbridge.protocol.frame.MaidTurnIdentity;
+import com.github.litroenade.maidbridge.protocol.frame.ServerChatMessage;
 import com.github.litroenade.maidbridge.trace.AiChainEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -31,9 +31,9 @@ public final class BridgeTransport {
     private static final int MAX_PROCESSED_INBOUND_IDS = 512;
 
     private final OutboundQueue outboundQueue = new OutboundQueue();
-    private final InboundGatewayTracker inboundGatewayTracker = new InboundGatewayTracker(MAX_PROCESSED_INBOUND_IDS);
-    private final AtomicLong inboundGatewayMessageFrames = new AtomicLong();
-    private final AtomicLong duplicateInboundGatewayFrames = new AtomicLong();
+    private final InboundServerChatTracker inboundServerChatTracker = new InboundServerChatTracker(MAX_PROCESSED_INBOUND_IDS);
+    private final AtomicLong inboundServerChatMessageFrames = new AtomicLong();
+    private final AtomicLong duplicateInboundServerChatFrames = new AtomicLong();
     private final AtomicLong malformedInboundFrames = new AtomicLong();
     private final AtomicLong outboundSendFailures = new AtomicLong();
     private final AtomicLong maidTurnDrops = new AtomicLong();
@@ -97,7 +97,7 @@ public final class BridgeTransport {
         for (var frame : outboundQueue.clearWithDropHooks()) {
             frame.onDropped();
         }
-        inboundGatewayTracker.clear();
+        inboundServerChatTracker.clear();
     }
 
     public void restart(MinecraftServer server) {
@@ -175,8 +175,8 @@ public final class BridgeTransport {
                 new BridgeTransportSnapshot.Counters(
                         outboundQueue.size(),
                         outboundQueue.droppedFrames(),
-                        inboundGatewayMessageFrames.get(),
-                        duplicateInboundGatewayFrames.get(),
+                        inboundServerChatMessageFrames.get(),
+                        duplicateInboundServerChatFrames.get(),
                         malformedInboundFrames.get(),
                         outboundSendFailures.get(),
                         maidTurnDrops.get(),
@@ -271,11 +271,11 @@ public final class BridgeTransport {
                 return;
             }
             switch (type) {
-                case BridgeProtocol.TYPE_GATEWAY_MESSAGE -> {
+                case BridgeProtocol.TYPE_SERVER_CHAT_MESSAGE -> {
                     if (rejectUnlessRole(session, rawFrame, type, List.of("message"))) {
                         return;
                     }
-                    handleGatewayFrame(session, rawFrame);
+                    handleServerChatFrame(session, rawFrame);
                 }
                 case BridgeProtocol.TYPE_MAID_MESSAGE_IN -> {
                     if (rejectUnlessRole(session, rawFrame, type, List.of("message"))) {
@@ -335,17 +335,17 @@ public final class BridgeTransport {
         }
     }
 
-    private void handleGatewayFrame(WebSocketBridgeServer.Session session, String rawFrame) {
+    private void handleServerChatFrame(WebSocketBridgeServer.Session session, String rawFrame) {
         BridgeFrameIdentity identity = BridgeInboundParser.parseFrameIdentity(rawFrame, Config.maxBridgeMessageBytes);
         try {
-            var message = BridgeInboundParser.parseGatewayMessage(
+            var message = BridgeInboundParser.parseServerChatMessage(
                     rawFrame,
                     Config.maxBridgeMessageBytes,
-                    Config.maxInboundGatewayTextCharacters
+                    Config.maxServerChatTextCharacters
             );
-            routeGatewayMessage(session, message);
+            routeServerChatMessage(session, message);
         } catch (RuntimeException exception) {
-            sendDomainFailure(session, BridgeProtocol.TYPE_GATEWAY_RESPONSE, identity.id(), identity.traceId(), exception.getMessage());
+            sendDomainFailure(session, BridgeProtocol.TYPE_SERVER_CHAT_RESPONSE, identity.id(), identity.traceId(), exception.getMessage());
         }
     }
 
@@ -370,7 +370,7 @@ public final class BridgeTransport {
             var message = BridgeInboundParser.parseMaidMessageIn(
                     rawFrame,
                     Config.maxBridgeMessageBytes,
-                    Config.maxInboundGatewayTextCharacters
+                    Config.maxInboundBridgeTextCharacters
             );
             MaidMessageDispatcher.schedule(
                     server,
@@ -389,7 +389,7 @@ public final class BridgeTransport {
             var complete = BridgeInboundParser.parseMaidAgentTurnComplete(
                     rawFrame,
                     Config.maxBridgeMessageBytes,
-                    Config.maxInboundGatewayTextCharacters
+                    Config.maxInboundBridgeTextCharacters
             );
             MaidBridge.LOGGER.info(
                     "收到 maid.agent.turn.complete 帧 sessionId={} type={} maidUuid={} turnId={} outcome={}",
@@ -425,32 +425,32 @@ public final class BridgeTransport {
         }
     }
 
-    private void routeGatewayMessage(WebSocketBridgeServer.Session session, BridgeGatewayMessage message) {
-        if (!Config.enableInboundGatewayMessages) {
-            sendDomainFailure(session, BridgeProtocol.TYPE_GATEWAY_RESPONSE, message.id(), message.traceId(), "入站网关消息未启用");
+    private void routeServerChatMessage(WebSocketBridgeServer.Session session, ServerChatMessage message) {
+        if (!Config.enableExternalServerChatMessages) {
+            sendDomainFailure(session, BridgeProtocol.TYPE_SERVER_CHAT_RESPONSE, message.id(), message.traceId(), "外部服务器群聊消息未启用");
             return;
         }
 
         var currentServer = server;
         if (currentServer == null) {
-            sendDomainFailure(session, BridgeProtocol.TYPE_GATEWAY_RESPONSE, message.id(), message.traceId(), "Minecraft 服务器不可用");
+            sendDomainFailure(session, BridgeProtocol.TYPE_SERVER_CHAT_RESPONSE, message.id(), message.traceId(), "Minecraft 服务器不可用");
             return;
         }
 
-        var reservation = inboundGatewayTracker.reserve(message.id(), Config.maxPendingInboundGatewayMessages);
+        var reservation = inboundServerChatTracker.reserve(message.id(), Config.maxPendingServerChatMessages);
         switch (reservation.status()) {
             case QUEUE_FULL -> {
-                sendDomainFailure(session, BridgeProtocol.TYPE_GATEWAY_RESPONSE, message.id(), message.traceId(), "入站网关消息队列已满");
+                sendDomainFailure(session, BridgeProtocol.TYPE_SERVER_CHAT_RESPONSE, message.id(), message.traceId(), "服务器群聊入站队列已满");
                 return;
             }
             case DUPLICATE_PENDING -> {
-                sendDomainFailure(session, BridgeProtocol.TYPE_GATEWAY_RESPONSE, message.id(), message.traceId(), "入站网关消息已在处理中");
+                sendDomainFailure(session, BridgeProtocol.TYPE_SERVER_CHAT_RESPONSE, message.id(), message.traceId(), "服务器群聊消息已在处理中");
                 return;
             }
             case DUPLICATE_SUCCEEDED -> {
-                duplicateInboundGatewayFrames.incrementAndGet();
-                sendDomainSuccess(session, BridgeProtocol.TYPE_GATEWAY_RESPONSE, message.id(), message.traceId(), Map.of(
-                        "routed", "gateway_message",
+                duplicateInboundServerChatFrames.incrementAndGet();
+                sendDomainSuccess(session, BridgeProtocol.TYPE_SERVER_CHAT_RESPONSE, message.id(), message.traceId(), Map.of(
+                        "routed", "server_chat_message",
                         "duplicate", true
                 ));
                 return;
@@ -462,30 +462,36 @@ public final class BridgeTransport {
         try {
             currentServer.execute(() -> {
                 try {
-                    var component = Component.literal(Config.inboundGatewayMessagePrefix + message.plainText());
+                    var component = serverChatComponent(message);
                     currentServer.getPlayerList().broadcastSystemMessage(component, false);
-                    inboundGatewayTracker.markSucceeded(message.id());
-                    inboundGatewayMessageFrames.incrementAndGet();
-                    sendDomainSuccess(session, BridgeProtocol.TYPE_GATEWAY_RESPONSE, message.id(), message.traceId(), Map.of(
-                            "routed", "gateway_message",
-                            "route_scope", message.routeScope(),
-                            "route", message.route(),
-                            "target", message.target(),
+                    inboundServerChatTracker.markSucceeded(message.id());
+                    inboundServerChatMessageFrames.incrementAndGet();
+                    sendDomainSuccess(session, BridgeProtocol.TYPE_SERVER_CHAT_RESPONSE, message.id(), message.traceId(), Map.of(
+                            "routed", "server_chat_message",
+                            "kind", message.kind(),
+                            "room_id", message.roomId(),
+                            "speaker_id", message.speakerId(),
                             "metadata", message.metadata(),
-                            "endpoint_id", message.endpointId(),
                             "source_endpoint", message.sourceEndpoint(),
                             "target_endpoint", message.targetEndpoint(),
                             "delivered_players", currentServer.getPlayerList().getPlayerCount()
                     ));
                 } catch (RuntimeException exception) {
-                    inboundGatewayTracker.markFailed(message.id());
-                    sendDomainFailure(session, BridgeProtocol.TYPE_GATEWAY_RESPONSE, message.id(), message.traceId(), exception.getMessage());
+                    inboundServerChatTracker.markFailed(message.id());
+                    sendDomainFailure(session, BridgeProtocol.TYPE_SERVER_CHAT_RESPONSE, message.id(), message.traceId(), exception.getMessage());
                 }
             });
         } catch (RuntimeException exception) {
-            inboundGatewayTracker.markFailed(message.id());
-            sendDomainFailure(session, BridgeProtocol.TYPE_GATEWAY_RESPONSE, message.id(), message.traceId(), exception.getMessage());
+            inboundServerChatTracker.markFailed(message.id());
+            sendDomainFailure(session, BridgeProtocol.TYPE_SERVER_CHAT_RESPONSE, message.id(), message.traceId(), exception.getMessage());
         }
+    }
+
+    private Component serverChatComponent(ServerChatMessage message) {
+        if (message.isSystemBroadcast()) {
+            return Component.literal(Config.serverChatSystemBroadcastPrefix + message.text());
+        }
+        return Component.translatable("chat.type.text", message.speakerName(), message.text());
     }
 
     private void sendDomainSuccess(WebSocketBridgeServer.Session session, String type, String replyTo, String traceId, Map<String, Object> payload) {
@@ -640,8 +646,8 @@ public final class BridgeTransport {
     }
 
     private String responseTypeForInbound(String inboundType) {
-        if (BridgeProtocol.TYPE_GATEWAY_MESSAGE.equals(inboundType)) {
-            return BridgeProtocol.TYPE_GATEWAY_RESPONSE;
+        if (BridgeProtocol.TYPE_SERVER_CHAT_MESSAGE.equals(inboundType)) {
+            return BridgeProtocol.TYPE_SERVER_CHAT_RESPONSE;
         }
         if (BridgeProtocol.TYPE_MAID_MESSAGE_IN.equals(inboundType)) {
             return BridgeProtocol.TYPE_MAID_MESSAGE_RESPONSE;

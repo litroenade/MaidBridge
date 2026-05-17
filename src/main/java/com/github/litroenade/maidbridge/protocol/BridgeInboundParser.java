@@ -2,13 +2,13 @@ package com.github.litroenade.maidbridge.protocol;
 
 import com.github.litroenade.maidbridge.protocol.frame.BridgeFrameIdentity;
 import com.github.litroenade.maidbridge.protocol.frame.BridgeFrameRouting;
-import com.github.litroenade.maidbridge.protocol.frame.BridgeGatewayMessage;
 import com.github.litroenade.maidbridge.protocol.frame.BridgeSessionInitialize;
 import com.github.litroenade.maidbridge.protocol.frame.MaidAgentTurnComplete;
 import com.github.litroenade.maidbridge.protocol.frame.MaidApiRequest;
 import com.github.litroenade.maidbridge.protocol.frame.MaidClientInfo;
 import com.github.litroenade.maidbridge.protocol.frame.MaidMessageIn;
 import com.github.litroenade.maidbridge.protocol.frame.MaidTurnIdentity;
+import com.github.litroenade.maidbridge.protocol.frame.ServerChatMessage;
 import com.google.gson.JsonObject;
 
 import java.util.ArrayList;
@@ -95,34 +95,37 @@ public final class BridgeInboundParser {
         );
     }
 
-    public static BridgeGatewayMessage parseGatewayMessage(String rawFrame, int maxBytes, int maxTextCharacters) {
+    public static ServerChatMessage parseServerChatMessage(String rawFrame, int maxBytes, int maxTextCharacters) {
         var json = parseRoot(rawFrame, maxBytes);
         var type = requiredString(json, "type");
-        if (!BridgeProtocol.TYPE_GATEWAY_MESSAGE.equals(type)) {
-            throw new IllegalArgumentException("不支持的 MaidBridge 网关帧类型：" + type);
+        if (!BridgeProtocol.TYPE_SERVER_CHAT_MESSAGE.equals(type)) {
+            throw new IllegalArgumentException("不支持的 MaidBridge 服务器群聊帧类型：" + type);
         }
-        requireClientToJavaDirection(json, BridgeProtocol.TYPE_GATEWAY_MESSAGE);
+        requireClientToJavaDirection(json, BridgeProtocol.TYPE_SERVER_CHAT_MESSAGE);
         var payload = requiredObject(json, "payload");
         var message = requiredObject(payload, "message");
-        var plainText = requiredString(message, "processed_plain_text");
-        if (plainText.length() > Math.max(1, maxTextCharacters)) {
-            throw new IllegalArgumentException("processed_plain_text 超过 maxInboundGatewayTextCharacters");
+        var kind = requiredString(message, "kind");
+        if (!"member".equals(kind) && !"system".equals(kind)) {
+            throw new IllegalArgumentException("payload.message.kind 只支持 member 或 system");
         }
-        var endpointId = optionalString(json, "endpoint_id");
-        var routeScope = firstNonBlank(optionalRouteScope(payload), endpointId);
-        if (!isSupportedGatewayRouteScope(routeScope)) {
-            throw new IllegalArgumentException("MaidBridge Java 不支持 bridge.gateway.message 的 route scope");
+        var text = requiredString(message, "text");
+        if (text.length() > Math.max(1, maxTextCharacters)) {
+            throw new IllegalArgumentException("payload.message.text 超过 maxServerChatTextCharacters");
         }
-        return new BridgeGatewayMessage(
+        var room = requiredObject(payload, "room");
+        var speaker = "member".equals(kind) ? requiredObject(payload, "speaker") : new JsonObject();
+        var speakerName = "member".equals(kind) ? requiredString(speaker, "name") : optionalString(speaker, "name");
+        return new ServerChatMessage(
                 requiredString(json, "id"),
                 optionalString(json, "trace_id"),
-                endpointId,
-                routeScope,
-                plainText,
+                kind,
+                text,
+                optionalString(speaker, "id"),
+                speakerName,
+                requiredString(room, "id"),
+                requiredString(room, "name"),
                 optionalString(json, "source_endpoint"),
                 optionalString(json, "target_endpoint"),
-                optionalObjectMap(payload, "route"),
-                optionalObjectMap(payload, "target"),
                 optionalObjectMap(payload, "metadata")
         );
     }
@@ -157,7 +160,7 @@ public final class BridgeInboundParser {
             throw new IllegalArgumentException("payload.text 必须是非空字符串");
         }
         if (text.length() > Math.max(1, maxTextCharacters)) {
-            throw new IllegalArgumentException("payload.text 超过 maxInboundGatewayTextCharacters");
+            throw new IllegalArgumentException("payload.text 超过 maxInboundBridgeTextCharacters");
         }
         var maidUuid = optionalMaidUuid(payload);
         if (maidUuid.isBlank()) {
@@ -232,11 +235,11 @@ public final class BridgeInboundParser {
         var agent = optionalAgentObject(payload);
         var chatText = requiredReplyText(reply);
         if (chatText.length() > Math.max(1, maxTextCharacters)) {
-            throw new IllegalArgumentException("reply.text 超过 maxInboundGatewayTextCharacters");
+            throw new IllegalArgumentException("reply.text 超过 maxInboundBridgeTextCharacters");
         }
         var ttsText = optionalString(reply, "tts_text");
         if (ttsText.length() > Math.max(1, maxTextCharacters)) {
-            throw new IllegalArgumentException("reply.tts_text 超过 maxInboundGatewayTextCharacters");
+            throw new IllegalArgumentException("reply.tts_text 超过 maxInboundBridgeTextCharacters");
         }
         return new MaidAgentTurnComplete(
                 requiredString(json, "id"),
@@ -262,13 +265,6 @@ public final class BridgeInboundParser {
             throw new IllegalArgumentException("history 必须是对象");
         }
         return optionalString(json.getAsJsonObject("history"), "policy");
-    }
-
-    private static String optionalRouteScope(JsonObject payload) {
-        if (!payload.has("route") || !payload.get("route").isJsonObject()) {
-            return "";
-        }
-        return optionalString(payload.getAsJsonObject("route"), "scope");
     }
 
     private static JsonObject optionalPayload(JsonObject json) {
@@ -354,13 +350,6 @@ public final class BridgeInboundParser {
             }
         }
         return List.copyOf(description);
-    }
-
-    private static boolean isSupportedGatewayRouteScope(String routeScope) {
-        return routeScope.isBlank()
-                || routeScope.equals("server")
-                || routeScope.equals("broadcast")
-                || routeScope.startsWith("server:");
     }
 
     private static void requireProtocol(JsonObject json) {
