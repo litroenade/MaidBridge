@@ -105,7 +105,7 @@ public abstract class LLMCallbackMixin {
         if (!Config.enableAiChainCapture || MaidBridgeMixinPlugin.isAiChainDiagnosticsDisabled()) {
             return;
         }
-        var payload = new LinkedHashMap<String, String>();
+        var payload = new LinkedHashMap<String, String>(); 
         payload.put("tool_call_id", String.valueOf(toolId));
         payload.put("result", String.valueOf(result));
         AiChainEventSink.emit("maid.ai.tool_result.added", payload);
@@ -136,7 +136,7 @@ public abstract class LLMCallbackMixin {
         maidbridge$putReflected(payload, "tool_call_type", toolCall, "getType");
         Object function = ReflectiveAccess.invoke(toolCall, "getFunction");
         if (function != null) {
-            maidbridge$putReflected(payload, "tool_name", function, "getName");
+            maidbridge$putReflected(payload, "tool_name", function, "getName"); 
             maidbridge$putReflected(payload, "arguments", function, "getArguments");
         }
     }

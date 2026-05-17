@@ -176,7 +176,7 @@ public abstract class AIChatScreenMixin extends Screen {
             return;
         }
         boolean editable = !maidbridge$shouldLockControls();
-        boolean externalAgentMode = maidbridge$isExternalAgentMode();           
+        boolean externalAgentMode = maidbridge$isExternalAgentMode();
         this.maidbridge$modeButton.visible = editable;
         this.maidbridge$modeButton.active = editable;
         this.maidbridge$modeButton.setSelect(this.maidbridge$popupKind == maidbridge$POPUP_MODE);
@@ -274,7 +274,8 @@ public abstract class AIChatScreenMixin extends Screen {
             return List.of(
                     MaidBridgePopupMenu.Entry.header(Component.translatable("gui.maidbridge.chat.popup.mode")),
                     MaidBridgePopupMenu.Entry.mode(Component.translatable("gui.maidbridge.chat.button.mode.native"), Config.MAID_CHAT_MODE_NATIVE, Config.MAID_CHAT_MODE_NATIVE.equals(mode)),
-                    MaidBridgePopupMenu.Entry.mode(Component.translatable("gui.maidbridge.chat.button.mode.tlm_bridge"), Config.MAID_CHAT_MODE_TLM_BRIDGE, Config.MAID_CHAT_MODE_TLM_BRIDGE.equals(mode)),
+                    // TLM+Bridge 模式尚未接入完整链路，先不在聊天窗口暴露。
+                    // MaidBridgePopupMenu.Entry.mode(Component.translatable("gui.maidbridge.chat.button.mode.tlm_bridge"), Config.MAID_CHAT_MODE_TLM_BRIDGE, Config.MAID_CHAT_MODE_TLM_BRIDGE.equals(mode)),
                     MaidBridgePopupMenu.Entry.mode(Component.translatable("gui.maidbridge.chat.button.mode.external"), Config.MAID_CHAT_MODE_EXTERNAL_AGENT, Config.MAID_CHAT_MODE_EXTERNAL_AGENT.equals(mode))
             );
         }
@@ -292,7 +293,8 @@ public abstract class AIChatScreenMixin extends Screen {
     private Component maidbridge$modeLabel(String mode) {
         return switch (mode) {
             case Config.MAID_CHAT_MODE_EXTERNAL_AGENT -> Component.translatable("gui.maidbridge.chat.button.mode.external");
-            case Config.MAID_CHAT_MODE_TLM_BRIDGE -> Component.translatable("gui.maidbridge.chat.button.mode.tlm_bridge");
+            // TLM+Bridge 模式暂时按原生模式显示，避免出现不可选择的半成品入口。
+            // case Config.MAID_CHAT_MODE_TLM_BRIDGE -> Component.translatable("gui.maidbridge.chat.button.mode.tlm_bridge");
             default -> Component.translatable("gui.maidbridge.chat.button.mode.native");
         };
     }
