@@ -65,7 +65,7 @@ public final class MaidAgentTurnCompleteFacade {
             var ttsDispatch = dispatchTtsIfRequested(maid, result.chatText(), result.ttsText());
             var actionResults = MaidActionExecutor.applyAll(maid, result.actions());
             var displayName = externalAgentDisplayName(maid, result, pendingTurn);
-            var ownerDelivered = ttsDispatch.dispatched() ? ownerOnline(maid) : deliverChatText(maid, result.chatText(), displayName);
+            var ownerDelivered = ttsDispatch.dispatched() || deliverChatText(maid, result.chatText(), displayName);
             var historyAppended = appendHistoryIfRequested(maid, result.chatText(), historyPolicy);
             var released = MaidExternalTurnGuard.releaseForIdentity(
                     new MaidTurnIdentity(result.maidUuid(), result.turnId(), result.id()),
@@ -284,6 +284,9 @@ public final class MaidAgentTurnCompleteFacade {
     private static TtsDispatch dispatchTtsIfRequested(Entity maid, String chatText, String ttsText) {
         if (ttsText == null || ttsText.isBlank()) {
             return new TtsDispatch(false, false, "", "");
+        }
+        if (!ownerOnline(maid)) {
+            return new TtsDispatch(true, false, "", "女仆主人不在线，已回退文本");
         }
         if (!AIConfig.TTS_ENABLED.get()) {
             return new TtsDispatch(true, false, "", "TouhouLittleMaid TTS 未启用");

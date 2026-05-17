@@ -139,7 +139,7 @@ public abstract class AIChatScreenMixin extends Screen {
 
     @Unique
     private boolean maidbridge$shouldHideNativeControls() {
-        return maidbridge$shouldLockControls() || maidbridge$isExternalAgentMode();
+        return maidbridge$shouldLockControls();
     }
 
     @Unique
@@ -148,9 +148,13 @@ public abstract class AIChatScreenMixin extends Screen {
             maidbridge$setNativeButtonsVisible(false);
             return;
         }
-        if (!maidbridge$shouldLockControls()) {
-            maidbridge$setNativeButtonsVisible(true);
+        if (maidbridge$isExternalAgentMode()) {
+            maidbridge$layoutNativeControls(true);
+            maidbridge$setExternalAgentNativeButtonsVisible();
+            return;
         }
+        maidbridge$layoutNativeControls(false);
+        maidbridge$setNativeButtonsVisible(true);
     }
 
     @Unique
@@ -163,9 +167,6 @@ public abstract class AIChatScreenMixin extends Screen {
         int slot = size + gap;
         int x = this.langButton.getX();
         int y = this.langButton.getY();
-        maidbridge$moveButton(this.llmButton, -slot);
-        maidbridge$moveButton(this.ttsButton, -slot);
-        maidbridge$moveButton(this.langButton, -slot);
         this.maidbridge$agentButton = this.addRenderableWidget(new FlatColorButton(x - slot, y, size, size, Component.literal("✦"), button -> maidbridge$togglePopup(maidbridge$POPUP_AGENT)).setTooltips("gui.maidbridge.chat.button.agent.tip"));
         this.maidbridge$modeButton = this.addRenderableWidget(new FlatColorButton(x, y, size, size, Component.literal("⇄"), button -> maidbridge$togglePopup(maidbridge$POPUP_MODE)).setTooltips("gui.maidbridge.chat.button.mode.tip"));
     }
@@ -308,9 +309,41 @@ public abstract class AIChatScreenMixin extends Screen {
     }
 
     @Unique
-    private static void maidbridge$moveButton(FlatColorButton button, int deltaX) {
+    private void maidbridge$layoutNativeControls(boolean externalAgentMode) {
+        int slot = maidbridge$buttonSlot();
+        if (slot <= 0) {
+            return;
+        }
+        if (this.configButton != null && this.settingButton != null) {
+            this.configButton.setX(this.settingButton.getX() + (externalAgentMode ? 0 : slot));
+        }
+        if (this.maidbridge$modeButton == null) {
+            return;
+        }
+        int anchorX = this.maidbridge$modeButton.getX();
+        if (externalAgentMode) {
+            maidbridge$setButtonX(this.ttsButton, anchorX - 3 * slot);
+            maidbridge$setButtonX(this.langButton, anchorX - 2 * slot);
+            maidbridge$setButtonX(this.maidbridge$agentButton, anchorX - slot);
+            return;
+        }
+        maidbridge$setButtonX(this.llmButton, anchorX - 3 * slot);
+        maidbridge$setButtonX(this.ttsButton, anchorX - 2 * slot);
+        maidbridge$setButtonX(this.langButton, anchorX - slot);
+    }
+
+    @Unique
+    private int maidbridge$buttonSlot() {
+        if (this.langButton == null) {
+            return 0;
+        }
+        return this.langButton.getHeight() + 2;
+    }
+
+    @Unique
+    private static void maidbridge$setButtonX(FlatColorButton button, int x) {
         if (button != null) {
-            button.setX(button.getX() + deltaX);
+            button.setX(x);
         }
     }
 
@@ -321,6 +354,15 @@ public abstract class AIChatScreenMixin extends Screen {
         maidbridge$setButtonVisible(this.llmButton, visible);
         maidbridge$setButtonVisible(this.ttsButton, visible);
         maidbridge$setButtonVisible(this.langButton, visible);
+    }
+
+    @Unique
+    private void maidbridge$setExternalAgentNativeButtonsVisible() {
+        maidbridge$setButtonVisible(this.configButton, true);
+        maidbridge$setButtonVisible(this.settingButton, false);
+        maidbridge$setButtonVisible(this.llmButton, false);
+        maidbridge$setButtonVisible(this.ttsButton, true);
+        maidbridge$setButtonVisible(this.langButton, true);
     }
 
     @Unique
