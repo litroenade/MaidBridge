@@ -15,7 +15,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * 聊天窗口刷新按钮使用；服务端重启 WebSocket 后重新同步外部 agent 菜单状态。
+ * 聊天窗口刷新按钮使用；只重发当前 agent 状态，避免从聊天 UI 断开正在接管的外部连接。
  */
 public record RefreshMaidBridgeAgentsPacket(int entityId) implements CustomPacketPayload {
     public static final CustomPacketPayload.Type<RefreshMaidBridgeAgentsPacket> TYPE = new CustomPacketPayload.Type<>(
@@ -53,11 +53,6 @@ public record RefreshMaidBridgeAgentsPacket(int entityId) implements CustomPacke
         Entity entity = player.level().getEntity(packet.entityId);
         if (!(entity instanceof EntityMaid maid) || !maid.isAlive() || !MaidAIChatAccess.canEditSettings(maid, player)) {
             return;
-        }
-        try {
-            MaidBridgeNetwork.restartWebSocketFromClient();
-        } catch (RuntimeException exception) {
-            MaidBridge.LOGGER.warn("玩家刷新 MaidBridge WebSocket 失败 player={} maidUuid={}", player.getScoreboardName(), maid.getUUID(), exception);
         }
         MaidBridgeNetwork.sendToClientPlayer(SyncMaidBridgeAgentStatePacket.current(), player);
     }
