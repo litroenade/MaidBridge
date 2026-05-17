@@ -6,6 +6,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Locale;
+import java.util.Objects;
 
 public final class Config {
     public static final String DEFAULT_SOURCE_ENDPOINT = "maidbridge-java";
@@ -214,12 +215,18 @@ public final class Config {
     public static int maxOutboundFrames = 512;
     public static int maxBufferedEvents = 512;
     public static boolean logCapturedEvents;
+    private static Runnable runtimeConfigChangedHandler = () -> {
+    };
 
     private Config() {
     }
 
     public static boolean isExternalMaidAgentMode() {
         return MAID_CHAT_MODE_EXTERNAL_AGENT.equals(maidAgentTurnMode) || enableExternalMaidAgentTurns;
+    }
+
+    public static void setRuntimeConfigChangedHandler(Runnable handler) {
+        runtimeConfigChangedHandler = Objects.requireNonNull(handler, "handler");
     }
 
     public static void setEnableServerChatBridge(boolean value) {
@@ -324,11 +331,18 @@ public final class Config {
 
     public static void setMaidAgentTurnMode(String value) {
         var normalizedMode = normalizeMaidAgentTurnMode(value);
+        var externalTurns = MAID_CHAT_MODE_EXTERNAL_AGENT.equals(normalizedMode);
+        if (Objects.equals(MAID_AGENT_TURN_MODE.get(), normalizedMode)
+                && Objects.equals(ENABLE_EXTERNAL_MAID_AGENT_TURNS.get(), externalTurns)) {
+            refreshFromSpec();
+            notifyRuntimeConfigChanged();
+            return;
+        }
         MAID_AGENT_TURN_MODE.set(normalizedMode);
-        ENABLE_EXTERNAL_MAID_AGENT_TURNS.set(MAID_CHAT_MODE_EXTERNAL_AGENT.equals(normalizedMode));
+        ENABLE_EXTERNAL_MAID_AGENT_TURNS.set(externalTurns);
         MAID_AGENT_TURN_MODE.save();
-        ENABLE_EXTERNAL_MAID_AGENT_TURNS.save();
         refreshFromSpec();
+        notifyRuntimeConfigChanged();
     }
 
     public static void setBridgeServerEnabled(boolean value) {
@@ -340,6 +354,7 @@ public final class Config {
         BRIDGE_SERVER_URL.set(endpoint.url());
         BRIDGE_SERVER_URL.save();
         refreshFromSpec();
+        notifyRuntimeConfigChanged();
     }
 
     public static void setBridgeAccessToken(String value) {
@@ -409,9 +424,19 @@ public final class Config {
     }
 
     private static <T> void setAndSave(ModConfigSpec.ConfigValue<T> configValue, T value) {
+        if (Objects.equals(configValue.get(), value)) {
+            refreshFromSpec();
+            notifyRuntimeConfigChanged();
+            return;
+        }
         configValue.set(value);
         configValue.save();
         refreshFromSpec();
+        notifyRuntimeConfigChanged();
+    }
+
+    private static void notifyRuntimeConfigChanged() {
+        runtimeConfigChangedHandler.run();
     }
 
     private static String normalizeServerChatSystemBroadcastPrefix(String value) {

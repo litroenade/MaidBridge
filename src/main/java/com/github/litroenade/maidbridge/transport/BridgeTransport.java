@@ -249,7 +249,13 @@ public final class BridgeTransport {
              * 这里先入队，重连后仍由同一个 turn complete 收口。
              */
             offerPriorityFrame(outboundFrame);
-            MaidBridge.LOGGER.debug("外部女仆轮次请求已入队，等待活动 agent 连接 requestId={}", requestId);
+            MaidBridge.LOGGER.warn(
+                    "外部女仆轮次请求已入队：当前没有可接收的活动 agent 会话 requestId={} maidUuid={} turnId={} connectedClients={}",
+                    requestId,
+                    outboundFrame.maidUuid(),
+                    outboundFrame.turnId(),
+                    currentServer == null ? 0 : currentServer.connectedClients()
+            );
             return;
         }
         if (!sendToSession(currentServer, activeAgent, outboundFrame, "agent轮次")) {
@@ -311,15 +317,35 @@ public final class BridgeTransport {
         BridgeFrameIdentity identity = BridgeInboundParser.parseFrameIdentity(rawFrame, Config.maxBridgeMessageBytes);
         try {
             var sessionInitialize = BridgeInboundParser.parseSessionInitialize(rawFrame, Config.maxBridgeMessageBytes);
-            var claim = BridgeRoutingRules.canReceiveAgentTurnRequests(sessionInitialize)
+            var wantsAgentTurns = BridgeRoutingRules.declaresAgentTurnRequests(sessionInitialize);
+            var normalizedMaidUuid = BridgeRoutingRules.normalizeMaidUuid(sessionInitialize.maidUuid());
+            if (wantsAgentTurns && normalizedMaidUuid.isBlank()) {
+                MaidBridge.LOGGER.warn(
+                        "拒绝 MaidBridge agent 会话：maid.uuid 不是有效 UUID sessionId={} clientId={} agentId={} maidUuid={}",
+                        session.id(),
+                        sessionInitialize.id(),
+                        sessionInitialize.agentId(),
+                        sessionInitialize.maidUuid()
+                );
+                sendDomainFailure(session, BridgeProtocol.TYPE_SESSION_READY, sessionInitialize.id(), sessionInitialize.traceId(), "maid.uuid 不是有效 UUID，无法接管女仆聊天");
+                return;
+            }
+            var claim = wantsAgentTurns
                     ? activeAgentTracker.claim(webSocketServer, session, sessionInitialize)
                     : ActiveAgentTracker.ClaimResult.accepted(null);
             if (!claim.accepted()) {
+                MaidBridge.LOGGER.warn(
+                        "拒绝 MaidBridge agent 会话：已有另一个活动 agent 客户端连接 sessionId={} clientId={} agentId={} maidUuid={}",
+                        session.id(),
+                        sessionInitialize.id(),
+                        sessionInitialize.agentId(),
+                        normalizedMaidUuid
+                );
                 sendDomainFailure(session, BridgeProtocol.TYPE_SESSION_READY, sessionInitialize.id(), sessionInitialize.traceId(), "已有另一个活动 agent 客户端连接");
                 return;
             }
             session.setSessionInitialize(sessionInitialize);
-            if (BridgeRoutingRules.canReceiveAgentTurnRequests(sessionInitialize)) {
+            if (wantsAgentTurns) {
                 var replacedSession = claim.replacedSession();
                 if (replacedSession != null) {
                     releaseDisconnectedTurns(replacedSession.id(), "active_agent_replaced");
@@ -329,6 +355,17 @@ public final class BridgeTransport {
             }
             var serverName = server == null ? "Minecraft 服务器" : server.getServerModName();
             sendDirect(session, BridgeFrameBuilder.sessionReadyFrame(serverName, sessionInitialize.id(), sessionInitialize.traceId()));
+            MaidBridge.LOGGER.info(
+                    "MaidBridge 会话已初始化 sessionId={} clientId={} agentId={} agentName={} maidUuid={} activeAgent={} roles={} subscriptions={}",
+                    session.id(),
+                    sessionInitialize.id(),
+                    sessionInitialize.agentId(),
+                    sessionInitialize.clientName(),
+                    normalizedMaidUuid,
+                    wantsAgentTurns,
+                    sessionInitialize.roles(),
+                    sessionInitialize.subscriptions()
+            );
             flushQueuedToSession(session);
         } catch (RuntimeException exception) {
             sendDomainFailure(session, BridgeProtocol.TYPE_SESSION_READY, identity.id(), identity.traceId(), exception.getMessage());

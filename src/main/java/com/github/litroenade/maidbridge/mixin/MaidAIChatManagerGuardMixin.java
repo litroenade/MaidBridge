@@ -2,7 +2,6 @@ package com.github.litroenade.maidbridge.mixin;
 
 import com.github.litroenade.maidbridge.Config;
 import com.github.litroenade.maidbridge.MaidBridge;
-import com.github.litroenade.maidbridge.maid.ai.chat.MaidExternalAgentDisplayState;
 import com.github.litroenade.maidbridge.maid.turn.MaidAgentTurnRequest;
 import com.github.litroenade.maidbridge.trace.ReflectiveAccess;
 import com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.ChatClientInfo;
@@ -19,9 +18,7 @@ public abstract class MaidAIChatManagerGuardMixin {
     @Inject(method = "chat", at = @At("HEAD"), cancellable = true)
     private void maidbridge$guardExternalAgentTurn(String message, ChatClientInfo clientInfo, ServerPlayer sender, CallbackInfo ci) {
         Object maid = ReflectiveAccess.invoke(this, "getMaid");
-        if (!(maid instanceof EntityMaid entityMaid)
-                || !Config.isExternalMaidAgentMode()
-                || !MaidExternalAgentDisplayState.hasAgent(entityMaid.getUUID())) {
+        if (!(maid instanceof EntityMaid) || !Config.isExternalMaidAgentMode()) {
             return;
         }
         ci.cancel();

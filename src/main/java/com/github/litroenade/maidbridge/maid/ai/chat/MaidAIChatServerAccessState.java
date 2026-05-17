@@ -1,5 +1,6 @@
 package com.github.litroenade.maidbridge.maid.ai.chat;
 
+import com.github.litroenade.maidbridge.Config;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -47,6 +48,6 @@ public final class MaidAIChatServerAccessState {
         if (!(entity instanceof EntityMaid maid)) {
             return false;
         }
-        return isChatOnly(player, maid.getUUID()) || MaidExternalAgentDisplayState.hasAgent(maid.getUUID());
+        return isChatOnly(player, maid.getUUID()) || Config.isExternalMaidAgentMode();
     }
 }

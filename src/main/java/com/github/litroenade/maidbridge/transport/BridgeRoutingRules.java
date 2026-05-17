@@ -4,6 +4,7 @@ import com.github.litroenade.maidbridge.protocol.frame.BridgeSessionInitialize;
 import com.github.litroenade.maidbridge.protocol.BridgeProtocol;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 根据客户端声明的 roles/subscriptions 判断一帧是否允许投递。
@@ -25,7 +26,7 @@ final class BridgeRoutingRules {
             return false;
         }
         if (BridgeProtocol.TYPE_MAID_AGENT_TURN_REQUEST.equals(frame.type())
-                && !sameNonBlank(sessionInitialize.maidUuid(), frame.maidUuid())) {
+                && !sameMaidUuid(sessionInitialize.maidUuid(), frame.maidUuid())) {
             return false;
         }
         if (frame.subscriptions().isEmpty()) {
@@ -39,11 +40,28 @@ final class BridgeRoutingRules {
         if (sessionInitialize == null) {
             return false;
         }
-        var maidUuid = sessionInitialize.maidUuid();
+        var maidUuid = normalizeMaidUuid(sessionInitialize.maidUuid());
+        return declaresAgentTurnRequests(sessionInitialize)
+                && !maidUuid.isBlank();
+    }
+
+    static boolean declaresAgentTurnRequests(BridgeSessionInitialize sessionInitialize) {
+        if (sessionInitialize == null) {
+            return false;
+        }
         return sessionInitialize.roles().contains("agent")
-                && maidUuid != null
-                && !maidUuid.isBlank()
                 && sessionInitialize.subscriptions().stream().anyMatch(subscription -> subscriptionMatches(subscription, BridgeProtocol.TYPE_MAID_AGENT_TURN_REQUEST));
+    }
+
+    static String normalizeMaidUuid(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        try {
+            return UUID.fromString(value.trim()).toString();
+        } catch (IllegalArgumentException ignored) {
+            return "";
+        }
     }
 
     static List<String> maidApiRoles(String type) {
@@ -94,7 +112,9 @@ final class BridgeRoutingRules {
         return false;
     }
 
-    private static boolean sameNonBlank(String left, String right) {
-        return left != null && !left.isBlank() && left.equals(right);
+    private static boolean sameMaidUuid(String left, String right) {
+        var normalizedLeft = normalizeMaidUuid(left);
+        var normalizedRight = normalizeMaidUuid(right);
+        return !normalizedLeft.isBlank() && normalizedLeft.equals(normalizedRight);
     }
 }

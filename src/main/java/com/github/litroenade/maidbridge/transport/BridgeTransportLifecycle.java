@@ -22,6 +22,7 @@ public final class BridgeTransportLifecycle {
     }
 
     public void register(IEventBus modEventBus) {
+        Config.setRuntimeConfigChangedHandler(this::applyCurrentConfig);
         modEventBus.addListener(this::onConfigReloading);
         NeoForge.EVENT_BUS.addListener(this::onServerStarted);
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
@@ -53,6 +54,10 @@ public final class BridgeTransportLifecycle {
         if (event.getConfig().getSpec() != Config.SPEC) {
             return;
         }
+        applyCurrentConfig();
+    }
+
+    private void applyCurrentConfig() {
         Config.refreshFromSpec();
         AiChainEventSink.configure(Config.maxBufferedEvents);
         bridgeTransport.configure(Config.maxOutboundFrames);

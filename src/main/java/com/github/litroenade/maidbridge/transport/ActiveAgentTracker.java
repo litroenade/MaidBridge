@@ -117,7 +117,7 @@ final class ActiveAgentTracker {
     }
 
     private static String normalize(String value) {
-        return value == null ? "" : value.trim();
+        return BridgeRoutingRules.normalizeMaidUuid(value);
     }
 
     private static boolean sameNonBlank(String current, String next) {

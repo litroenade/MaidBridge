@@ -43,13 +43,10 @@ public final class MaidAIChatClientAccessState {
     }
 
     public static boolean isExternalAgentMode(EntityMaid maid) {
-        return Config.MAID_CHAT_MODE_EXTERNAL_AGENT.equals(chatMode) && maid != null && ACTIVE_AGENT_BY_MAID.containsKey(maid.getUUID());
+        return Config.MAID_CHAT_MODE_EXTERNAL_AGENT.equals(chatMode);
     }
 
     public static String chatMode(EntityMaid maid) {
-        if (Config.MAID_CHAT_MODE_EXTERNAL_AGENT.equals(chatMode) && !isExternalAgentMode(maid)) {
-            return Config.MAID_CHAT_MODE_NATIVE;
-        }
         return chatMode;
     }
 

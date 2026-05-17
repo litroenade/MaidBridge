@@ -4,7 +4,6 @@ import com.github.litroenade.maidbridge.Config;
 import com.github.litroenade.maidbridge.MaidBridge;
 import com.github.litroenade.maidbridge.maid.ai.chat.MaidAIChatAccess;
 import com.github.litroenade.maidbridge.maid.ai.chat.MaidAIChatAttributionContext;
-import com.github.litroenade.maidbridge.maid.ai.chat.MaidExternalAgentDisplayState;
 import com.github.litroenade.maidbridge.maid.turn.MaidAgentTurnRequest;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.network.message.SendUserChatPackage;
@@ -28,7 +27,7 @@ public abstract class SendUserChatPackageMixin {
         if (!(entity instanceof EntityMaid maid) || !maid.isAlive()) {
             return;
         }
-        if (Config.isExternalMaidAgentMode() && MaidExternalAgentDisplayState.hasAgent(maid.getUUID())) {
+        if (Config.isExternalMaidAgentMode()) {
             ci.cancel();
             if (MaidAIChatAccess.canSendChat(maid, sender)) {
                 var result = MaidAgentTurnRequest.emit(maid.getAiChatManager(), message.message(), message.clientInfo(), sender);

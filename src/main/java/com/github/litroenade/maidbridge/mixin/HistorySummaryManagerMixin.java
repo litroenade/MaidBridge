@@ -1,7 +1,6 @@
 package com.github.litroenade.maidbridge.mixin;
 
 import com.github.litroenade.maidbridge.Config;
-import com.github.litroenade.maidbridge.maid.ai.chat.MaidExternalAgentDisplayState;
 import com.github.litroenade.maidbridge.trace.ReflectiveAccess;
 import com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.MaidAIChatManager;
 import com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.summary.HistorySummaryManager;
@@ -43,8 +42,6 @@ public abstract class HistorySummaryManagerMixin {
     @Unique
     private boolean maidbridge$isExternalAgentMaid() {
         Object maid = ReflectiveAccess.invoke(this.chatManager, "getMaid");
-        return Config.isExternalMaidAgentMode()
-                && maid instanceof EntityMaid entityMaid
-                && MaidExternalAgentDisplayState.hasAgent(entityMaid.getUUID());
+        return Config.isExternalMaidAgentMode() && maid instanceof EntityMaid;
     }
 }
